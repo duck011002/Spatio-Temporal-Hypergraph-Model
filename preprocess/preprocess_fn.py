@@ -10,28 +10,22 @@ def id_encode(
         column: str,
         padding: int = -1
 ) -> Tuple[LabelEncoder, int]:
-    """
-
-    :param fit_df: only consider the data in encode df for constructing LabelEncoder instance
-    :param encode_df: the dataframe which use the constructed LabelEncoder instance to encode their values
-    :param column: the column to be encoded
-    :param padding:
-    :return:
-    """
     id_le = LabelEncoder()
     id_le = id_le.fit(fit_df[column].values.tolist())
+
+    classes_list = id_le.classes_.tolist()
+    mapping = {val: idx for idx, val in enumerate(classes_list)}
+
     if padding == 0:
         padding_id = padding
-        encode_df[column] = [
-            id_le.transform([i])[0] + 1 if i in id_le.classes_ else padding_id
-            for i in encode_df[column].values.tolist()
-        ]
+        # 从 1 开始映射，缺失的填 0
+        mapping_shifted = {val: idx + 1 for val, idx in mapping.items()}
+        encode_df[column] = encode_df[column].map(mapping_shifted).fillna(padding_id).astype(int)
     else:
-        padding_id = len(id_le.classes_)
-        encode_df[column] = [
-            id_le.transform([i])[0] if i in id_le.classes_ else padding_id
-            for i in encode_df[column].values.tolist()
-        ]
+        padding_id = len(classes_list)
+        # 从 0 开始映射，缺失的填 padding_id
+        encode_df[column] = encode_df[column].map(mapping).fillna(padding_id).astype(int)
+
     return id_le, padding_id
 
 

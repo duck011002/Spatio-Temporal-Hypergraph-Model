@@ -2,6 +2,7 @@ import logging
 import os
 import os.path as osp
 import datetime
+import time
 import torch
 import random
 from tqdm import tqdm
@@ -12,6 +13,7 @@ from utils import seed_torch, set_logger, Cfg, count_parameters, test_step, save
 from layer import NeighborSampler
 from dataset import LBSNDataset
 from model import STHGCN, SequentialTransformer
+from utils.run_reporter import RunReporter, configure_console_logging
 
 
 if __name__ == '__main__':
@@ -62,10 +64,36 @@ if __name__ == '__main__':
     hparam_dict['seed'] = seed
     hparam_dict['sizes'] = '-'.join([str(item) for item in cfg.model_args.sizes])
 
+    run_reporter = RunReporter.create(
+        root='runs',
+        dataset=cfg.dataset_args.dataset_name,
+        model=cfg.model_args.model_name,
+        seed=seed,
+        hparams=hparam_dict,
+        log_path=cfg.run_args.log_path,
+        tensorboard_path=cfg.run_args.save_path
+    )
+    configure_console_logging()
+    logging.info(f'[Run] Artifacts: {run_reporter.run_dir}')
+
     # Preprocess data
+    setup_progress = tqdm(
+        total=3,
+        desc='Setup',
+        unit='stage',
+        dynamic_ncols=True
+    )
+    setup_progress.set_postfix_str('preprocess')
+    stage_started_at = time.perf_counter()
+    run_reporter.stage_started('preprocess')
     preprocess(cfg)
+    run_reporter.stage_finished('preprocess', time.perf_counter() - stage_started_at)
+    setup_progress.update(1)
 
     # Initialize dataset
+    setup_progress.set_postfix_str('load dataset')
+    stage_started_at = time.perf_counter()
+    run_reporter.stage_started('dataset')
     lbsn_dataset = LBSNDataset(cfg)
     cfg.dataset_args.spatial_slots = lbsn_dataset.spatial_slots
     cfg.dataset_args.num_user = lbsn_dataset.num_user
@@ -76,8 +104,13 @@ if __name__ == '__main__':
     cfg.dataset_args.padding_poi_category = lbsn_dataset.padding_poi_category
     cfg.dataset_args.padding_hour_id = lbsn_dataset.padding_hour_id
     cfg.dataset_args.padding_weekday_id = lbsn_dataset.padding_weekday_id
+    run_reporter.stage_finished('dataset', time.perf_counter() - stage_started_at)
+    setup_progress.update(1)
 
     # Initialize neighbor sampler(dataloader)
+    setup_progress.set_postfix_str('build samplers')
+    stage_started_at = time.perf_counter()
+    run_reporter.stage_started('samplers')
     sampler_train, sampler_validate, sampler_test = None, None, None
 
     if cfg.run_args.do_train:
@@ -146,6 +179,10 @@ if __name__ == '__main__':
             pin_memory=True
         )
 
+    run_reporter.stage_finished('samplers', time.perf_counter() - stage_started_at)
+    setup_progress.update(1)
+    setup_progress.close()
+
     if cfg.model_args.model_name == 'sthgcn':
         model = STHGCN(cfg)
     elif cfg.model_args.model_name == 'seq_transformer':
@@ -197,11 +234,24 @@ if __name__ == '__main__':
         # Training Loop
         best_metrics = 0.0
         global_step = 0
+        training_started_at = time.perf_counter()
+        run_reporter.stage_started('training', planned_epochs=cfg.run_args.epoch)
         for eph in range(cfg.run_args.epoch):
             training_logs = []
+            running_loss_total = 0.0
+            last_validation = None
+            epoch_started_at = time.perf_counter()
             if global_step >= cfg.run_args.max_steps:
                 break
-            for data in tqdm(sampler_train):
+            progress = tqdm(
+                sampler_train,
+                total=len(sampler_train),
+                desc=f'Train {eph + 1}/{cfg.run_args.epoch}',
+                unit='batch',
+                dynamic_ncols=True,
+                leave=True
+            )
+            for data in progress:
                 model.train()
                 split_index = torch.max(data.adjs_t[1].storage.row()).tolist()
                 data = data.to(device)
@@ -216,17 +266,23 @@ if __name__ == '__main__':
                 }
 
                 out, loss = model(input_data, label=data.y[:, 0])
-                training_logs.append(loss)
+                loss_value = float(loss.detach().cpu().item())
+                training_logs.append(loss_value)
+                running_loss_total += loss_value
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                summary_writer.add_scalar(f'train/loss_step', loss, global_step)
+                summary_writer.add_scalar(f'train/loss_step', loss_value, global_step)
 
                 if cfg.run_args.do_validate and global_step % cfg.run_args.valid_steps == 0:
                     logging.info(f'[Evaluating] Evaluating on Valid Dataset...')
 
                     logging.info(f'[Evaluating] Epoch {eph}, step {global_step}:')
-                    recall_res, ndcg_res, map_res, mrr_res, eval_loss = test_step(model, data=sampler_validate)
+                    recall_res, ndcg_res, map_res, mrr_res, eval_loss = test_step(
+                        model,
+                        data=sampler_validate,
+                        desc=f'Validate {eph + 1}/{cfg.run_args.epoch}'
+                    )
                     summary_writer.add_scalar(f'validate/Recall@1', 100*recall_res[1], global_step)
                     summary_writer.add_scalar(f'validate/Recall@5', 100*recall_res[5], global_step)
                     summary_writer.add_scalar(f'validate/Recall@10', 100*recall_res[10], global_step)
@@ -234,6 +290,29 @@ if __name__ == '__main__':
                     summary_writer.add_scalar(f'validate/MRR', mrr_res, global_step)
                     summary_writer.add_scalar(f'validate/eval_loss', eval_loss, global_step)
                     summary_writer.add_scalar('train/learning_rate', current_learning_rate, global_step)
+
+                    last_validation = {
+                        'global_step': global_step,
+                        'loss': float(eval_loss),
+                        'recall_at_1': float(recall_res[1]),
+                        'recall_at_5': float(recall_res[5]),
+                        'recall_at_10': float(recall_res[10]),
+                        'recall_at_20': float(recall_res[20]),
+                        'mrr': float(mrr_res),
+                        'ndcg_at_1': float(ndcg_res[1]),
+                        'ndcg_at_5': float(ndcg_res[5]),
+                        'ndcg_at_10': float(ndcg_res[10]),
+                        'ndcg_at_20': float(ndcg_res[20]),
+                        'map_at_1': float(map_res[1]),
+                        'map_at_5': float(map_res[5]),
+                        'map_at_10': float(map_res[10]),
+                        'map_at_20': float(map_res[20])
+                    }
+                    run_reporter.validation(
+                        epoch=eph + 1,
+                        global_step=global_step,
+                        metrics=last_validation
+                    )
 
                     metrics = 4 * recall_res[1] + recall_res[20]
 
@@ -263,17 +342,36 @@ if __name__ == '__main__':
                 if global_step >= cfg.run_args.max_steps:
                     break
                 global_step += 1
+                progress.set_postfix(
+                    loss=f'{running_loss_total / len(training_logs):.4f}',
+                    lr=f'{current_learning_rate:.2e}'
+                )
 
-            epoch_loss = sum([loss for loss in training_logs]) / len(training_logs)
+            epoch_loss = running_loss_total / len(training_logs)
             logging.info(f'[Training] Average train loss at step {global_step} is {epoch_loss}:')
             summary_writer.add_scalar('train/loss_epoch', epoch_loss, eph)
+            run_reporter.epoch(
+                epoch=eph + 1,
+                global_step=global_step,
+                train_loss=epoch_loss,
+                learning_rate=current_learning_rate,
+                duration_s=time.perf_counter() - epoch_started_at,
+                validation=last_validation
+            )
+        run_reporter.stage_finished('training', time.perf_counter() - training_started_at)
 
     if cfg.run_args.do_test:
         logging.info('[Evaluating] Start evaluating on test set...')
 
         checkpoint = torch.load(osp.join(cfg.run_args.save_path, 'checkpoint.pt'))
         model.load_state_dict(checkpoint['model_state_dict'])
-        recall_res, ndcg_res, map_res, mrr_res, loss = test_step(model, sampler_test)
+        test_started_at = time.perf_counter()
+        run_reporter.stage_started('test')
+        recall_res, ndcg_res, map_res, mrr_res, loss = test_step(
+            model,
+            sampler_test,
+            desc='Test'
+        )
         num_params = count_parameters(model)
         metric_dict = {
             'hparam/num_params': num_params,
@@ -293,4 +391,13 @@ if __name__ == '__main__':
         }
         logging.info(f'[Evaluating] Test evaluation result : {metric_dict}')
         summary_writer.add_hparams(hparam_dict, metric_dict)
-        summary_writer.close()
+        run_reporter.stage_finished(
+            'test',
+            time.perf_counter() - test_started_at,
+            metrics=metric_dict
+        )
+        run_reporter.finish(test_metrics=metric_dict)
+    else:
+        run_reporter.finish()
+
+    summary_writer.close()

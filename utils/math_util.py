@@ -125,8 +125,15 @@ def haversine(lon1, lat1, lon2, lat2):
     elif isinstance(lon1, pd.Series):
         if not lon1.shape[0]:
             return None
-        lon_lat = pd.concat([lon1, lat1, lon2, lat2], axis=1)
-        c = lon_lat.apply(lambda x: row_wise(x[0], x[1], x[2], x[3]), axis=1)
+        import numpy as np
+        rad_lon1 = np.radians(lon1)
+        rad_lat1 = np.radians(lat1)
+        rad_lon2 = np.radians(lon2)
+        rad_lat2 = np.radians(lat2)
+        dlon = rad_lon2 - rad_lon1
+        dlat = rad_lat2 - rad_lat1
+        a = np.sin(dlat / 2) ** 2 + np.cos(rad_lat1) * np.cos(rad_lat2) * np.sin(dlon / 2) ** 2
+        c = 2 * np.arcsin(np.sqrt(a))
     else:
         if pd.isna(lon1) or pd.isna(lat1) or pd.isna(lon2) or pd.isna(lat2):
             return None

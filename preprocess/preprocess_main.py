@@ -34,7 +34,7 @@ def preprocess_nyc(path: bytes, preprocessed_path: bytes) -> pd.DataFrame:
     # data transformation
     df['trajectory_id'] = df['pseudo_session_trajectory_id']
     df['UTCTimeOffset'] = df['UTCTimeOffset'].apply(lambda x: datetime.strptime(x[:19], "%Y-%m-%d %H:%M:%S"))
-    df['UTCTimeOffsetEpoch'] = df['UTCTimeOffset'].apply(lambda x: x.strftime('%s'))
+    df['UTCTimeOffsetEpoch'] = df['UTCTimeOffset'].apply(lambda x: str(int(x.timestamp())))
     df['UTCTimeOffsetWeekday'] = df['UTCTimeOffset'].apply(lambda x: x.weekday())
     df['UTCTimeOffsetHour'] = df['UTCTimeOffset'].apply(lambda x: x.hour)
     df['UTCTimeOffsetDay'] = df['UTCTimeOffset'].apply(lambda x: x.strftime('%Y-%m-%d'))

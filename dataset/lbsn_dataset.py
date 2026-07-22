@@ -71,9 +71,9 @@ class LBSNDataset:
         self.padding_hour_id = le_data[8]
         self.padding_weekday_id = le_data[9]
 
-        self.num_user = df['UserId'].nunique()
-        self.num_poi = df['PoiId'].nunique()
-        self.num_category = df['PoiCategoryId'].nunique()
+        self.num_user = max(int(df['UserId'].max()), df['UserId'].nunique())
+        self.num_poi = max(int(df['PoiId'].max()), df['PoiId'].nunique())
+        self.num_category = max(int(df['PoiCategoryId'].max()), df['PoiCategoryId'].nunique())
         self.num_checkin = df.shape[0]
         self.num_traj = df['pseudo_session_trajectory_id'].nunique()
 

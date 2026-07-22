@@ -7,11 +7,9 @@ import os.path as osp
 
 
 def get_root_dir():
-    dirname = os.getcwd()
-    dirname_split = dirname.split("/")
-    index = dirname_split.index("Spatio-Temporal-Hypergraph-Model")
-    dirname = "/".join(dirname_split[:index + 1])
-    return dirname
+    # 获取当前文件所在目录的父目录，即为项目根目录，避免硬编码目录名及跨平台路径分隔符问题
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 
 def set_logger(args):

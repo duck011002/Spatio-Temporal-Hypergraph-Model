@@ -159,7 +159,7 @@ class STHGCN(nn.Module):
         else:
             raise ValueError(f"Get wrong distance_encoder_type argument: {cfg.model_args.distance_encoder_type}!")
 
-        self.linear = nn.Linear(self.checkin_embed_size, self.num_poi)
+        self.linear = nn.Linear(self.checkin_embed_size, self.num_poi + 1)
         self.loss_func = nn.CrossEntropyLoss()
 
     def forward(self, data, label=None, mode='train'):

@@ -35,13 +35,20 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def test_step(model, data, ks=(1, 5, 10, 20)):
+def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=True):
     model.eval()
     loss_list = []
     pred_list = []
     label_list = []
     with torch.no_grad():
-        for row in tqdm(data):
+        for row in tqdm(
+            data,
+            desc=desc,
+            unit='batch',
+            dynamic_ncols=True,
+            leave=False,
+            disable=not show_progress
+        ):
             split_index = torch.max(row.adjs_t[1].storage.row()).tolist()
             row = row.to(model.device)
 
@@ -60,6 +67,8 @@ def test_step(model, data, ks=(1, 5, 10, 20)):
             ranking = torch.sort(out, descending=True)[1]
             pred_list.append(ranking.cpu().detach())
             label_list.append(row.y[:, :1].cpu())
+    if len(pred_list) == 0:
+        return {k: 0.0 for k in ks}, {k: 0.0 for k in ks}, {k: 0.0 for k in ks}, 0.0, 0.0
     pred_ = torch.cat(pred_list, dim=0)
     label_ = torch.cat(label_list, dim=0)
     recalls, NDCGs, MAPs = {}, {}, {}

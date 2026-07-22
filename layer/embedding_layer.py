@@ -12,23 +12,37 @@ class CheckinEmbedding(nn.Module):
         super(CheckinEmbedding, self).__init__()
         self.embed_size = embed_size
         self.fusion_type = fusion_type
+        num_user = max(dataset_args.num_user + 50, dataset_args.padding_user_id + 10)
+        num_poi = max(dataset_args.num_poi + 50, dataset_args.padding_poi_id + 10)
+        num_category = max(dataset_args.num_category + 50, dataset_args.padding_poi_category + 10)
+        num_weekday = max(16, dataset_args.padding_weekday_id + 10)
+        num_hour = max(32, dataset_args.padding_hour_id + 10)
+
         self.user_embedding = nn.Embedding(
-            dataset_args.num_user + 1,
+            num_user,
             self.embed_size,
-            padding_idx=dataset_args.padding_user_id
+            padding_idx=dataset_args.padding_user_id if 0 <= dataset_args.padding_user_id < num_user else None
         )
         self.poi_embedding = nn.Embedding(
-            dataset_args.num_poi + 1,
+            num_poi,
             self.embed_size,
-            padding_idx=dataset_args.padding_poi_id
+            padding_idx=dataset_args.padding_poi_id if 0 <= dataset_args.padding_poi_id < num_poi else None
         )
         self.category_embedding = nn.Embedding(
-            dataset_args.num_category + 1,
+            num_category,
             self.embed_size,
-            padding_idx=dataset_args.padding_poi_category
+            padding_idx=dataset_args.padding_poi_category if 0 <= dataset_args.padding_poi_category < num_category else None
         )
-        self.dayofweek_embedding = nn.Embedding(8, self.embed_size, padding_idx=dataset_args.padding_weekday_id)
-        self.hourofday_embedding = nn.Embedding(25, self.embed_size, padding_idx=dataset_args.padding_hour_id)
+        self.dayofweek_embedding = nn.Embedding(
+            num_weekday,
+            self.embed_size,
+            padding_idx=dataset_args.padding_weekday_id if 0 <= dataset_args.padding_weekday_id < num_weekday else None
+        )
+        self.hourofday_embedding = nn.Embedding(
+            num_hour,
+            self.embed_size,
+            padding_idx=dataset_args.padding_hour_id if 0 <= dataset_args.padding_hour_id < num_hour else None
+        )
         if self.fusion_type == 'concat':
             self.output_embed_size = 5 * self.embed_size
         elif self.fusion_type == 'add':

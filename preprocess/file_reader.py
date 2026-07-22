@@ -33,7 +33,7 @@ class FileReader(FileReaderBase):
             ]
             df['UTCTime'] = df['UTCTime'].apply(lambda x: datetime.strptime(x, "%a %b %d %H:%M:%S +0000 %Y"))
             df['UTCTimeOffset'] = df['UTCTime'] + df['TimezoneOffset'].apply(lambda x: timedelta(hours=x/60))
-        df['UTCTimeOffsetEpoch'] = df['UTCTimeOffset'].apply(lambda x: x.strftime('%s'))
+        df['UTCTimeOffsetEpoch'] = df['UTCTimeOffset'].apply(lambda x: str(int(x.timestamp())))
         df['UTCTimeOffsetWeekday'] = df['UTCTimeOffset'].apply(lambda x: x.weekday())
         df['UTCTimeOffsetHour'] = df['UTCTimeOffset'].apply(lambda x: x.hour)
         df['UTCTimeOffsetDay'] = df['UTCTimeOffset'].apply(lambda x: x.strftime('%Y-%m-%d'))
@@ -76,33 +76,30 @@ class FileReader(FileReaderBase):
         validation_index = int(total_len * 0.8)
         test_index = int(total_len * 0.9)
         df = df.sort_values(by='UTCTimeOffset', ascending=True)
-        df.iloc[validation_index:test_index]['SplitTag'] = 'validation'
-        df.iloc[test_index:]['SplitTag'] = 'test'
+        val_idx_range = df.index[validation_index:test_index]
+        test_idx_range = df.index[test_index:]
+        df.loc[val_idx_range, 'SplitTag'] = 'validation'
+        df.loc[test_idx_range, 'SplitTag'] = 'test'
         df['UserRank'] = df.groupby('UserId')['UTCTimeOffset'].rank(method='first')
 
         # Filter out check-in records when their gaps with thier previous check-in and later check-in
         # are both larger than 24 hours
         df = df.sort_values(by=['UserId', 'UTCTimeOffset'], ascending=True)
-        isolated_index = []
-        for idx, diff1, diff2, user, user1, user2 in zip(
-            df.index,
-            df['UTCTimeOffset'].diff(1),
-            df['UTCTimeOffset'].diff(-1),
-            df['UserId'],
-            df['UserId'].shift(1),
-            df['UserId'].shift(-1)
-        ):
-            if pd.isna(diff1) and abs(diff2.total_seconds()) > 86400 and user == user2:
-                isolated_index.append(idx)
-            elif pd.isna(diff2) and abs(diff1.total_seconds()) > 86400 and user == user1:
-                isolated_index.append(idx)
-            if abs(diff1.total_seconds()) > 86400 and abs(diff2.total_seconds()) > 86400 and user == user1 and user == user2:
-                isolated_index.append(idx)
-            elif abs(diff2.total_seconds()) > 86400 and user == user2 and user != user1:
-                isolated_index.append(idx)
-            elif abs(diff1.total_seconds()) > 86400 and user == user1 and user != user2:
-                isolated_index.append(idx)
-        df = df[~df.index.isin(set(isolated_index))]
+
+        diff1_sec = df['UTCTimeOffset'].diff(1).dt.total_seconds().abs()
+        diff2_sec = df['UTCTimeOffset'].diff(-1).dt.total_seconds().abs()
+        user = df['UserId']
+        user1 = df['UserId'].shift(1)
+        user2 = df['UserId'].shift(-1)
+
+        cond1 = diff1_sec.isna() & (diff2_sec > 86400) & (user == user2)
+        cond2 = diff2_sec.isna() & (diff1_sec > 86400) & (user == user1)
+        cond3 = (diff1_sec > 86400) & (diff2_sec > 86400) & (user == user1) & (user == user2)
+        cond4 = (diff2_sec > 86400) & (user == user2) & (user != user1)
+        cond5 = (diff1_sec > 86400) & (user == user1) & (user != user2)
+
+        is_isolated = cond1 | cond2 | cond3 | cond4 | cond5
+        df = df[~is_isolated]
 
         logging.info('[Preprocess - Train/Validate/Test Split] Done.')
         return df
@@ -116,7 +113,13 @@ class FileReader(FileReaderBase):
         pseudo_session_trajectory_id = [start_id]
         start_user = df['UserId'].tolist()[0]
         time_interval = []
-        for user, time_diff in tqdm(zip(df['UserId'], df['UTCTimeOffset'].diff())):
+        for user, time_diff in tqdm(
+                zip(df['UserId'], df['UTCTimeOffset'].diff()),
+                total=len(df),
+                desc='Preprocess: build sessions',
+                unit='checkin',
+                dynamic_ncols=True
+        ):
             if pd.isna(time_diff):
                 time_interval.append(None)
                 continue

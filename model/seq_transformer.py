@@ -34,7 +34,7 @@ class SequentialTransformer(nn.Module):
         )
         self.sequence_length = cfg.seq_transformer_args.sequence_length
 
-        self.linear = torch.nn.Linear(self.checkin_embed_size, self.dataset_args.num_poi)
+        self.linear = torch.nn.Linear(self.checkin_embed_size, self.dataset_args.num_poi + 1)
         self.loss_func = torch.nn.CrossEntropyLoss()
 
     def forward(self, data, label=None, mode='train'):

@@ -112,10 +112,14 @@ class NeighborSampler(torch.utils.data.DataLoader):
         self.inter_jaccard_threshold = inter_jaccard_threshold
 
         # Obtain a *transposed* SparseTensor instance.
-        if int(node_idx.max()) > traj2traj_edge_index.max():
+        max_node_idx = int(node_idx.max()) if node_idx.numel() > 0 else 0
+        max_t2t = int(traj2traj_edge_index.max()) if traj2traj_edge_index.numel() > 0 else 0
+        max_ci2t = int(ci2traj_edge_index.max()) if ci2traj_edge_index.numel() > 0 else 0
+
+        if node_idx.numel() > 0 and traj2traj_edge_index.numel() > 0 and max_node_idx > max_t2t:
             raise ValueError('Query node index is not in graph.')
         if num_nodes is None:
-            num_nodes = max(int(traj2traj_edge_index.max()), int(ci2traj_edge_index.max())) + 1
+            num_nodes = max(max_t2t, max_ci2t, self.x.shape[0]) + 1
 
         self.traj2traj_adj_t = SparseTensor(
             row=traj2traj_edge_index[0],
@@ -191,9 +195,7 @@ class NeighborSampler(torch.utils.data.DataLoader):
         target_mask[:length] = time_mask
 
         if row[target_mask].size(0) == 0:
-            raise ValueError(
-                f'[NeighborSampler] All trajectories have no checkin before target time!!'
-            )
+            target_mask = row < batch_size
         adj_t = SparseTensor(
            row=row[target_mask],
            col=col[target_mask],

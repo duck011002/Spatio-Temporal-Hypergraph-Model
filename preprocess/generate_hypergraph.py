@@ -375,7 +375,12 @@ def filter_chunk(row, col, data, he_size, chunk_num=10, threshold=0.02, filter_m
     # Split the data to multiple chunks for large data
     chunk_bin = np.linspace(0, row.shape[0], chunk_num, dtype=np.int64)
     rows, cols, datas = [], [], []
-    for i in tqdm(range(len(chunk_bin) - 1)):
+    for i in tqdm(
+            range(len(chunk_bin) - 1),
+            desc='Preprocess: filter hypergraph',
+            unit='chunk',
+            dynamic_ncols=True
+    ):
         row_chunk = row[chunk_bin[i]:chunk_bin[i + 1]]
         col_chunk = col[chunk_bin[i]:chunk_bin[i + 1]]
         data_chunk = data[chunk_bin[i]:chunk_bin[i + 1]]

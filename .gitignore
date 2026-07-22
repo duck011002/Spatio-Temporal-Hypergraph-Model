@@ -10,6 +10,9 @@ data/ca/preprocessed
 log/
 checkpoint/
 tensorboard/
+runs/
+server_artifacts/
+.tmp_psftp_artifacts.txt
 logs/
 test/
 .idea/
