@@ -37,6 +37,8 @@ def count_parameters(model):
 
 def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=True):
     model.eval()
+    if hasattr(model, 'reset_moe_diagnostics'):
+        model.reset_moe_diagnostics()
     loss_list = []
     pred_list = []
     label_list = []
@@ -80,4 +82,11 @@ def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=Tru
         logging.info(f"[Evaluating] Recall@{k_} : {recalls[k_]},\tNDCG@{k_} : {NDCGs[k_]},\tMAP@{k_} : {MAPs[k_]}")
     mrr_res = mrr(label_, pred_).cpu().detach().numpy().tolist()
     logging.info(f"[Evaluating] MRR : {mrr_res}")
+    if hasattr(model, 'get_moe_diagnostics'):
+        moe_diagnostics = model.get_moe_diagnostics(reset=True)
+        if moe_diagnostics is not None:
+            logging.info(
+                '[MoE] Diagnostics: %s',
+                json.dumps(moe_diagnostics, sort_keys=True)
+            )
     return recalls, NDCGs, MAPs, mrr_res, np.mean(loss_list)

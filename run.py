@@ -198,6 +198,15 @@ if __name__ == '__main__':
     for name, param in model.named_parameters():
         logging.info(f'[Training] Parameter {name}: {param.size()}, require_grad = {param.requires_grad}')
     logging.info(f'[Training] #Parameters: {count_parameters(model)}')
+    if getattr(model, 'use_moe', False):
+        logging.info(
+            '[MoE] Enabled: context=%s experts=%s top_k=%s rank=%s balance_weight=%s',
+            model.moe.router_context,
+            model.moe.num_experts,
+            model.moe.top_k,
+            cfg.model_args.moe_rank,
+            model.moe_loss_weight
+        )
 
     if cfg.run_args.do_train:
         current_learning_rate = cfg.run_args.learning_rate
@@ -273,6 +282,12 @@ if __name__ == '__main__':
                 loss.backward()
                 optimizer.step()
                 summary_writer.add_scalar(f'train/loss_step', loss_value, global_step)
+                if getattr(model, 'last_moe_aux_loss', None) is not None:
+                    summary_writer.add_scalar(
+                        'train/moe_balance_loss_step',
+                        float(model.last_moe_aux_loss.cpu().item()),
+                        global_step
+                    )
 
                 if cfg.run_args.do_validate and global_step % cfg.run_args.valid_steps == 0:
                     logging.info(f'[Evaluating] Evaluating on Valid Dataset...')

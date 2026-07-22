@@ -9,6 +9,7 @@ from layer import (
     DistanceEncoderSTAN,
     DistanceEncoderSimple
 )
+from .sparse_moe import HypergraphConditionedSharedSparseMoE
 
 
 class STHGCN(nn.Module):
@@ -24,6 +25,8 @@ class STHGCN(nn.Module):
         self.num_conv_layers = len(cfg.model_args.sizes)
         self.num_poi = cfg.dataset_args.num_poi
         self.embed_fusion_type = cfg.model_args.embed_fusion_type
+        self.use_moe = bool(getattr(cfg.model_args, 'use_moe', False))
+        self.moe_loss_weight = float(getattr(cfg.model_args, 'moe_loss_weight', 0.0))
         self.checkin_embedding_layer = CheckinEmbedding(
             embed_size=cfg.model_args.embed_size,
             fusion_type=self.embed_fusion_type,
@@ -159,8 +162,43 @@ class STHGCN(nn.Module):
         else:
             raise ValueError(f"Get wrong distance_encoder_type argument: {cfg.model_args.distance_encoder_type}!")
 
+        # Keep the original prediction head initialization before optional R1
+        # modules so R0 and R1 share all common-parameter initialization.
         self.linear = nn.Linear(self.checkin_embed_size, self.num_poi + 1)
+        if self.use_moe:
+            self.moe = HypergraphConditionedSharedSparseMoE(
+                hidden_size=self.checkin_embed_size,
+                rank=int(getattr(cfg.model_args, 'moe_rank', 32)),
+                num_experts=int(getattr(cfg.model_args, 'moe_num_experts', 4)),
+                top_k=int(getattr(cfg.model_args, 'moe_top_k', 2)),
+                router_hidden_size=int(
+                    getattr(cfg.model_args, 'moe_router_hidden_size', 128)
+                ),
+                dropout=float(getattr(cfg.model_args, 'moe_dropout', self.dropout_rate)),
+                use_shared_expert=bool(
+                    getattr(cfg.model_args, 'moe_use_shared_expert', True)
+                ),
+                shared_alpha_init=float(
+                    getattr(cfg.model_args, 'moe_shared_alpha_init', 0.15)
+                ),
+                residual_scale=float(
+                    getattr(cfg.model_args, 'moe_residual_scale', 1.0)
+                ),
+                router_context=str(
+                    getattr(cfg.model_args, 'moe_router_context', 'hypergraph')
+                ),
+            )
         self.loss_func = nn.CrossEntropyLoss()
+        self.last_moe_aux_loss = None
+
+    def reset_moe_diagnostics(self):
+        if self.use_moe:
+            self.moe.reset_diagnostics()
+
+    def get_moe_diagnostics(self, reset=False):
+        if not self.use_moe:
+            return None
+        return self.moe.diagnostics(reset=reset)
 
     def forward(self, data, label=None, mode='train'):
         input_x = data['x']  # [?, 8]
@@ -246,6 +284,16 @@ class STHGCN(nn.Module):
         else:
             x = x_for_time_filter
 
+        if self.use_moe:
+            local_state = x_for_time_filter[:x.size(0)]
+            x, moe_aux_loss = self.moe(x, local_state)
+            self.last_moe_aux_loss = moe_aux_loss.detach()
+        else:
+            moe_aux_loss = x.sum() * 0.0
+            self.last_moe_aux_loss = None
+
         logits = self.linear(x)
         loss = self.loss_func(logits, label.long())
+        if self.use_moe and self.moe_loss_weight != 0.0:
+            loss = loss + self.moe_loss_weight * moe_aux_loss
         return logits, loss
