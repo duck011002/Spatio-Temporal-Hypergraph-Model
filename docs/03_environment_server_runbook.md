@@ -24,11 +24,13 @@
 | 服务器 SSH 主机 | `connect.westb.seetacloud.com` |
 | SSH 端口 | `45559` |
 | SSH 用户 | `root` |
-| 服务器项目目录 | `/root/autodl-tmp/STHGCN` |
+| 服务器旧项目目录 | `/root/autodl-tmp/STHGCN`，只保留旧训练和数据，不直接修改 |
+| 服务器当前 Git 工作目录 | `/root/autodl-tmp/STHGCN-git` |
 | Conda 初始化脚本 | `/root/miniconda3/etc/profile.d/conda.sh` |
 | 当前远程环境 | `base` |
 | 本地 Git 服务器远程名 | `autodl` |
-| 远程工作仓库 | `/root/autodl-tmp/STHGCN.git` |
+| 服务器裸仓库 | `/root/autodl-tmp/STHGCN.git` |
+| 当前数据链接 | `/root/autodl-tmp/STHGCN-git/data -> ../STHGCN/data` |
 | PuTTY host key | `ssh-ed25519 255 SHA256:EPstg8jNN+u3Bs1JyQOqlBeq3w+a4VynoJAe48YnIV0` |
 
 当前 Git 远程：
@@ -114,7 +116,7 @@ ssh -p 45559 root@connect.westb.seetacloud.com
 ```bash
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate base
-cd /root/autodl-tmp/STHGCN
+cd /root/autodl-tmp/STHGCN-git
 python --version
 python -c "import torch; print(torch.__version__, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 python -c "import torch_geometric; import torch_sparse; print(torch_geometric.__version__)"
@@ -145,14 +147,14 @@ git push autodl feature/hc-shared-moe
 ```bash
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate base
-cd /root/autodl-tmp/STHGCN
+cd /root/autodl-tmp/STHGCN-git
 python run.py -f best_conf/nyc.yml
 ```
 
 ### 6.3 后台 NYC 运行
 
 ```bash
-cd /root/autodl-tmp/STHGCN
+cd /root/autodl-tmp/STHGCN-git
 mkdir -p logs
 nohup python run.py -f best_conf/nyc.yml > logs/nyc_single_seed.launcher.log 2>&1 &
 ```
@@ -162,13 +164,13 @@ nohup python run.py -f best_conf/nyc.yml > logs/nyc_single_seed.launcher.log 2>&
 ### 6.4 查看进度
 
 ```bash
-tail -n 80 -F /root/autodl-tmp/STHGCN/logs/nyc_single_seed.launcher.log
+tail -n 80 -F /root/autodl-tmp/STHGCN-git/logs/nyc_single_seed.launcher.log
 ```
 
 正式训练指标日志位于：
 
 ```text
-/root/autodl-tmp/STHGCN/log/<timestamp>/nyc/train.log
+/root/autodl-tmp/STHGCN-git/log/<timestamp>/nyc/train.log
 ```
 
 辅助检查：
@@ -223,7 +225,7 @@ server_artifacts/<dataset>_<timestamp>_tensorboard/
 7. 不在逐模块阶段运行 TKY。
 8. 最终模型冻结后再安排 CA、TKY 和多种子。
 
-当前最近目标是 M1 单低秩 Adapter。此阶段不同时加入 Router、Shared Expert 或 LLM。
+当前 R1 第一版已经完成。下一轮只做一个轻量结构或强度调整，仍先在 NYC 单种子上筛选；未通过 Recall@1/@5/@10 二选三门槛前，不运行 CA、TKY，也不加入 LLM。
 
 ## 9. 常见问题
 
@@ -252,6 +254,8 @@ python run.py -f best_conf/nyc_r1_moe.yml
 ```
 
 两条命令均不添加 `--multi_run_mode`，沿用配置文件中的单个 seed。
+
+R1 正式配置使用 `early_stop_patience: 5`。早停以 epoch 为单位：连续 5 个完整 epoch 没有刷新原有 checkpoint 选择分数 `4 × Recall@1 + Recall@20` 时停止训练，随后仍执行最佳 checkpoint 的完整 test。结果验收同时对比 Recall@1/5/10/20、NDCG@1/5/10/20、MAP@1/5/10/20 与 MRR；工程快速成功要求 Recall@1、@5、@10 至少两项超过 R0。
 
 ### CA 日志只有 validation
 

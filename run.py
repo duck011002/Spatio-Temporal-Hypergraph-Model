@@ -242,6 +242,8 @@ if __name__ == '__main__':
 
         # Training Loop
         best_metrics = 0.0
+        early_stop_patience = int(getattr(cfg.run_args, 'early_stop_patience', 0) or 0)
+        epochs_without_improvement = 0
         global_step = 0
         training_started_at = time.perf_counter()
         run_reporter.stage_started('training', planned_epochs=cfg.run_args.epoch)
@@ -249,6 +251,7 @@ if __name__ == '__main__':
             training_logs = []
             running_loss_total = 0.0
             last_validation = None
+            epoch_improved = False
             epoch_started_at = time.perf_counter()
             if global_step >= cfg.run_args.max_steps:
                 break
@@ -343,6 +346,7 @@ if __name__ == '__main__':
                         logging.info(f'[Training] Save model at step {global_step} epoch {eph}')
                         save_model(model, optimizer, save_variable_list, cfg.run_args, hparam_dict)
                         best_metrics = metrics
+                        epoch_improved = True
 
                 # learning rate schedule
                 if global_step >= warm_up_steps:
@@ -373,6 +377,22 @@ if __name__ == '__main__':
                 duration_s=time.perf_counter() - epoch_started_at,
                 validation=last_validation
             )
+            if early_stop_patience > 0:
+                if epoch_improved:
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
+                logging.info(
+                    '[Training] Early stopping: %s/%s epochs without improvement',
+                    epochs_without_improvement,
+                    early_stop_patience
+                )
+                if epochs_without_improvement >= early_stop_patience:
+                    logging.info(
+                        '[Training] Early stopping triggered after epoch %s',
+                        eph + 1
+                    )
+                    break
         run_reporter.stage_finished('training', time.perf_counter() - training_started_at)
 
     if cfg.run_args.do_test:

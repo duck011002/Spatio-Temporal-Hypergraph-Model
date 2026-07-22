@@ -69,6 +69,7 @@ run_args:
   cooldown_rate: 1.5
   max_steps: 100000
   epoch: 20
+  early_stop_patience: 5
   valid_steps: 500
   num_workers: 4
   init_checkpoint:

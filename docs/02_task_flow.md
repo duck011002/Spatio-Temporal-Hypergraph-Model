@@ -12,6 +12,8 @@
 - CA 用于中等规模泛化检查，TKY 只在最终候选冻结后运行。
 - smoke 只判断链路正确，完整训练才判断推荐效果。
 - test 不用于反复调参；结构选择优先看 validation，冻结后再报告 test。
+- 正式训练连续 5 个 epoch 未刷新最佳 validation 时早停，并回载最佳 checkpoint 做 test。
+- R1 快速成功条件为 Recall@1、Recall@5、Recall@10 中至少两项超过 R0；同时完整记录 Recall@20、NDCG@1/5/10/20、MAP 与 MRR。
 
 ## 2. 当前工程基线
 
@@ -20,7 +22,7 @@
 当前基线：
 
 - 基线分支：`main`；当前融合分支：`feature/hc-shared-moe`。
-- 提交：`0e65a3d`。
+- 基线提交：`0e65a3d`；R1 第一版提交：`e267a29`。
 - 远程：`autodl/main` 与本地 `main` 当前对齐。
 - R0：原始 STHGCN。
 - NYC R0 test 已完整归档。
@@ -34,6 +36,9 @@
 3. 新增 `utils/run_reporter.py`，按运行保存阶段耗时、validation、test 与配置快照。
 4. 新增 TKY 2 epoch、5 epoch 快速配置。
 5. 本地保存 NYC、CA 的服务器日志和 checkpoint artifact。
+6. `e267a29`：加入超图条件 Router、Top-2 稀疏专家、shared expert、低秩 adapter 与路由诊断。
+7. R1 服务器 smoke 通过，NYC 单种子完整训练与 test 已归档。
+8. 正式配置加入 `early_stop_patience: 5`，并固定完整指标记录与 Recall@1/@5/@10 二选三判据。
 
 ## 3. 方法结构约定
 
@@ -111,7 +116,7 @@ output = h_H + beta * moe_delta
 
 ### M3：超图条件化 Router
 
-状态：R1 候选已实现，待 NYC smoke 与完整训练。
+状态：R1 第一版已实现并完成 NYC smoke 与完整训练。
 
 目标：将 Router 输入切换为 `[h_L || h_H || c_H]`，验证超图协作上下文是否改善路由。
 
@@ -119,7 +124,7 @@ output = h_H + beta * moe_delta
 
 ### M4：Shared Expert
 
-状态：R1 候选已实现，待 NYC smoke 与完整训练。
+状态：R1 第一版已实现并完成 NYC smoke 与完整训练。
 
 目标：增加 always-active shared adapter，并通过 scalar gate 与 routed 输出融合。
 
@@ -131,7 +136,7 @@ output = h_H + beta * moe_delta
 
 ### M5：无 LLM 结构冻结
 
-状态：待执行。
+状态：暂缓冻结。R1 第一版仅 Recall@10 超过 R0，未通过 Recall@1/@5/@10 二选三判据。
 
 目标：选出 R1，并冻结 MoE 结构、Router 输入、adapter rank 和训练配置。
 
@@ -193,4 +198,4 @@ output = h_H + beta * moe_delta
 
 ## 6. 当前下一步
 
-当前 R1 候选一次性接通低秩专家、Top-2 稀疏派发、超图条件 Router 和 shared expert，但各部分均保留配置边界，方便后补消融。下一步依次执行本地静态检查、服务器 NYC smoke 和服务器 NYC 单次完整训练。沿用配置中的一个 seed，不增加额外 seed，不运行 CA、TKY，也不接入 LLM。
+R1 第一版已完成闭环：工程 smoke 成功、四个 routed expert 均有流量、参数只增加约 1.73%，但最终 Recall@1/@5/@10 仅 Recall@10 超过 R0，因此暂不进入 CA、TKY，也不接入 LLM。下一轮优先做单变量轻量调整，目标是保留 Recall@10/@20 的覆盖增益，同时降低 MoE 残差对 Top-1/Top-5 排序的扰动；仍只运行 NYC 固定单种子。候选方向按优先级为：降低 `moe_residual_scale`，其次比较更保守的 Top-1 或降低 rank；每次只改一项。
