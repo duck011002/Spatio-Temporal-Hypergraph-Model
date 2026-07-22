@@ -13,7 +13,7 @@
 - smoke 只判断链路正确，完整训练才判断推荐效果。
 - test 不用于反复调参；结构选择优先看 validation，冻结后再报告 test。
 - 正式训练连续 5 个 epoch 未刷新最佳 validation 时早停，并回载最佳 checkpoint 做 test。
-- R1 快速成功条件为 Recall@1、Recall@5、Recall@10 中至少两项超过 R0；同时完整记录 Recall@20、NDCG@1/5/10/20、MAP 与 MRR。
+- R1 开发期小成功条件为 Recall@1、Recall@5、Recall@10、Recall@20 中至少两项超过 R0；同时完整记录 NDCG@1/5/10/20、MAP 与 MRR。
 
 ## 2. 当前工程基线
 
@@ -22,7 +22,7 @@
 当前基线：
 
 - 基线分支：`main`；当前融合分支：`feature/hc-shared-moe`。
-- 基线提交：`0e65a3d`；R1 第一版提交：`e267a29`。
+- 基线提交：`0e65a3d`；R1 第一版提交：`e267a29`；调参配置提交：`b6ca105`。
 - 远程：`autodl/main` 与本地 `main` 当前对齐。
 - R0：原始 STHGCN。
 - NYC R0 test 已完整归档。
@@ -38,7 +38,9 @@
 5. 本地保存 NYC、CA 的服务器日志和 checkpoint artifact。
 6. `e267a29`：加入超图条件 Router、Top-2 稀疏专家、shared expert、低秩 adapter 与路由诊断。
 7. R1 服务器 smoke 通过，NYC 单种子完整训练与 test 已归档。
-8. 正式配置加入 `early_stop_patience: 5`，并固定完整指标记录与 Recall@1/@5/@10 二选三判据。
+8. 正式配置加入 `early_stop_patience: 5`，并固定完整指标记录与 Recall@1/@5/@10/@20 二过四判据。
+9. R1.1：4 专家、Top-2、rank 32、残差缩放 0.5，NYC 单种子完整训练结束。
+10. R1.2：8 专家、Top-2、rank 32、残差缩放 0.5，NYC 单种子完整训练结束。
 
 ## 3. 方法结构约定
 
@@ -136,7 +138,7 @@ output = h_H + beta * moe_delta
 
 ### M5：无 LLM 结构冻结
 
-状态：暂缓冻结。R1 第一版仅 Recall@10 超过 R0，未通过 Recall@1/@5/@10 二选三判据。
+状态：暂缓冻结。R1、R1.1、R1.2 均在 Recall@10 与 Recall@20 上超过 R0，达到开发期二过四小成功，但头部排序尚未超过 R0。
 
 目标：选出 R1，并冻结 MoE 结构、Router 输入、adapter rank 和训练配置。
 
@@ -198,4 +200,4 @@ output = h_H + beta * moe_delta
 
 ## 6. 当前下一步
 
-R1 第一版已完成闭环：工程 smoke 成功、四个 routed expert 均有流量、参数只增加约 1.73%，但最终 Recall@1/@5/@10 仅 Recall@10 超过 R0，因此暂不进入 CA、TKY，也不接入 LLM。下一轮优先做单变量轻量调整，目标是保留 Recall@10/@20 的覆盖增益，同时降低 MoE 残差对 Top-1/Top-5 排序的扰动；仍只运行 NYC 固定单种子。候选方向按优先级为：降低 `moe_residual_scale`，其次比较更保守的 Top-1 或降低 rank；每次只改一项。
+R1.1 与 R1.2 已完成服务器 smoke、单种子全量训练、早停、test 与 artifact 归档。R1.1 更参数高效，Top-1 与 MRR 略优；R1.2 的 Recall@10、Recall@20 更高，但 8 个专家中有 1 个无流量、2 个流量很低。下一步先讨论最终保留 4 专家还是继续解决 8 专家的路由利用率；在结构决定前不运行 CA、TKY，不接入 LLM，也不增加种子。

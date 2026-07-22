@@ -225,7 +225,7 @@ server_artifacts/<dataset>_<timestamp>_tensorboard/
 7. 不在逐模块阶段运行 TKY。
 8. 最终模型冻结后再安排 CA、TKY 和多种子。
 
-当前 R1 第一版已经完成。下一轮只做一个轻量结构或强度调整，仍先在 NYC 单种子上筛选；未通过 Recall@1/@5/@10 二选三门槛前，不运行 CA、TKY，也不加入 LLM。
+当前 R1、R1.1、R1.2 的 NYC 单种子实验均已完成。后续仍按一次只改一个变量的方式筛选；结构未冻结前，不运行 CA、TKY，也不加入 LLM。
 
 ## 9. 常见问题
 
@@ -255,7 +255,25 @@ python run.py -f best_conf/nyc_r1_moe.yml
 
 两条命令均不添加 `--multi_run_mode`，沿用配置文件中的单个 seed。
 
-R1 正式配置使用 `early_stop_patience: 5`。早停以 epoch 为单位：连续 5 个完整 epoch 没有刷新原有 checkpoint 选择分数 `4 × Recall@1 + Recall@20` 时停止训练，随后仍执行最佳 checkpoint 的完整 test。结果验收同时对比 Recall@1/5/10/20、NDCG@1/5/10/20、MAP@1/5/10/20 与 MRR；工程快速成功要求 Recall@1、@5、@10 至少两项超过 R0。
+R1 正式配置使用 `early_stop_patience: 5`。早停以 epoch 为单位：连续 5 个完整 epoch 没有刷新原有 checkpoint 选择分数 `4 × Recall@1 + Recall@20` 时停止训练，随后仍执行最佳 checkpoint 的完整 test。结果验收同时对比 Recall@1/5/10/20、NDCG@1/5/10/20、MAP@1/5/10/20 与 MRR；开发期小成功要求 Recall@1、@5、@10、@20 至少两项超过 R0。
+
+### R1 调参配置
+
+4 专家、残差缩放 0.5：
+
+```bash
+python run.py -f smoke_conf/nyc_r1_1_scale05_smoke.yml
+python run.py -f best_conf/nyc_r1_1_scale05.yml
+```
+
+8 专家、残差缩放 0.5：
+
+```bash
+python run.py -f smoke_conf/nyc_r1_2_8experts_smoke.yml
+python run.py -f best_conf/nyc_r1_2_8experts.yml
+```
+
+两组均只使用配置内的固定单种子，不添加 `--multi_run_mode`。
 
 ### CA 日志只有 validation
 
