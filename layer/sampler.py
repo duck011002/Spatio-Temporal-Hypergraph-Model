@@ -213,11 +213,14 @@ class NeighborSampler(torch.utils.data.DataLoader):
             np.ones(row[target_mask].shape[0]),
             (he_poi.numpy().astype(np.long), row[target_mask].numpy())
         )).tocsr()
-        self.he2he_jaccard = im.T * im
-        self.he2he_jaccard = self.he2he_jaccard.tocoo()
+        # Only the first ``batch_size`` trajectories are query trajectories.
+        # The leakage filter below only reads their rows, so avoid materializing
+        # the unused neighbor-to-neighbor part of the local Gram matrix.
+        filtered_traj_size = np.asarray(im.multiply(im).sum(axis=0)).ravel()
+        self.he2he_jaccard = (im[:, :batch_size].T * im).tocoo()
 
-        # Calculate jaccard similarity of traj2traj
-        filtered_traj_size = self.he2he_jaccard.diagonal()
+        # Calculate jaccard similarity of target trajectories to all sampled
+        # trajectories.  This is the same rectangle selected from ``im.T * im``.
         source_size = filtered_traj_size[self.he2he_jaccard.col]
         target_size = filtered_traj_size[self.he2he_jaccard.row]
         self.he2he_jaccard.data = self.he2he_jaccard.data / (source_size + target_size - self.he2he_jaccard.data)
