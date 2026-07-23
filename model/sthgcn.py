@@ -207,6 +207,18 @@ class STHGCN(nn.Module):
                 target_num_groups=int(
                     getattr(cfg.model_args, 'moe_target_num_groups', 0)
                 ),
+                aux_loss_free=bool(
+                    getattr(cfg.model_args, 'moe_aux_loss_free', False)
+                ),
+                router_bias_update_rate=float(
+                    getattr(cfg.model_args, 'moe_router_bias_update_rate', 0.0)
+                ),
+                adaptive_shared_gate=bool(
+                    getattr(cfg.model_args, 'moe_adaptive_shared_gate', False)
+                ),
+                adaptive_residual_gate=bool(
+                    getattr(cfg.model_args, 'moe_adaptive_residual_gate', False)
+                ),
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None
@@ -223,6 +235,8 @@ class STHGCN(nn.Module):
         return diagnostics
 
     def current_moe_loss_weight(self):
+        if self.use_moe and self.moe.aux_loss_free:
+            return 0.0
         if (
             self.use_moe
             and self.moe.adaptive_grouping

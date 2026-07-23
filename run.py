@@ -202,7 +202,9 @@ if __name__ == '__main__':
         logging.info(
             '[MoE] Enabled: context=%s experts=%s top_k=%s rank=%s '
             'balance_weight=%s post_group_balance_weight=%s '
-            'adaptive_grouping=%s group_warmup_steps=%s target_groups=%s',
+            'adaptive_grouping=%s group_warmup_steps=%s target_groups=%s '
+            'aux_loss_free=%s router_bias_update_rate=%s '
+            'adaptive_shared_gate=%s adaptive_residual_gate=%s',
             model.moe.router_context,
             model.moe.num_experts,
             model.moe.top_k,
@@ -212,6 +214,10 @@ if __name__ == '__main__':
             model.moe.adaptive_grouping,
             model.moe.group_warmup_steps,
             model.moe.target_num_groups,
+            model.moe.aux_loss_free,
+            model.moe.router_bias_update_rate,
+            model.moe.adaptive_shared_gate,
+            model.moe.adaptive_residual_gate,
         )
 
     if cfg.run_args.do_train:

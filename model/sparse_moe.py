@@ -42,6 +42,10 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         group_warmup_steps=3000,
         group_similarity_threshold=0.5,
         target_num_groups=0,
+        aux_loss_free=False,
+        router_bias_update_rate=0.0,
+        adaptive_shared_gate=False,
+        adaptive_residual_gate=False,
     ):
         super(HypergraphConditionedSharedSparseMoE, self).__init__()
         if num_experts < 1:
@@ -72,6 +76,14 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             raise ValueError('target_num_groups requires adaptive grouping')
         if target_num_groups and target_num_groups < top_k:
             raise ValueError('target_num_groups must be at least top_k')
+        if router_bias_update_rate < 0.0:
+            raise ValueError('router_bias_update_rate must be non-negative')
+        if adaptive_shared_gate and not use_shared_expert:
+            raise ValueError('adaptive_shared_gate requires the shared expert')
+        if adaptive_residual_gate and not 0.0 < residual_scale < 1.0:
+            raise ValueError(
+                'adaptive_residual_gate requires residual_scale strictly between 0 and 1'
+            )
 
         self.hidden_size = hidden_size
         self.num_experts = num_experts
@@ -84,6 +96,13 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self.group_warmup_steps = int(group_warmup_steps)
         self.group_similarity_threshold = float(group_similarity_threshold)
         self.target_num_groups = int(target_num_groups)
+        self.aux_loss_free = bool(aux_loss_free)
+        self.router_bias_update_rate = float(router_bias_update_rate)
+        self.adaptive_shared_gate = bool(adaptive_shared_gate)
+        self.adaptive_residual_gate = bool(adaptive_residual_gate)
+        router_input_size = (
+            hidden_size * 3 if router_context == 'hypergraph' else hidden_size
+        )
 
         if self.single_adapter_mode:
             # The control contains exactly one normalized low-rank adapter and
@@ -91,7 +110,6 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             self.router_norm = nn.Identity()
             self.router = None
         else:
-            router_input_size = hidden_size * 3 if router_context == 'hypergraph' else hidden_size
             self.router_norm = nn.LayerNorm(router_input_size)
             self.router = nn.Sequential(
                 nn.Linear(router_input_size, router_hidden_size),
@@ -107,6 +125,17 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             self.shared_expert = LowRankAdapter(hidden_size, rank, dropout)
             alpha_logit = math.log(shared_alpha_init / (1.0 - shared_alpha_init))
             self.shared_alpha = nn.Parameter(torch.tensor(alpha_logit, dtype=torch.float32))
+            if self.adaptive_shared_gate:
+                self.shared_gate = nn.Linear(router_input_size, 1, bias=False)
+                nn.init.zeros_(self.shared_gate.weight)
+        if self.adaptive_residual_gate:
+            residual_logit = math.log(residual_scale / (1.0 - residual_scale))
+            self.register_buffer(
+                '_residual_scale_logit',
+                torch.tensor(residual_logit, dtype=torch.float32),
+            )
+            self.residual_gate = nn.Linear(router_input_size, 1, bias=False)
+            nn.init.zeros_(self.residual_gate.weight)
 
         # Adaptive grouping keeps all experts. During a short warm-up it stores
         # only O(E^2) routing statistics, then clusters experts once and freezes
@@ -135,6 +164,13 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             '_grouping_finalized',
             torch.tensor(not self.adaptive_grouping, dtype=torch.bool),
         )
+        # Following auxiliary-loss-free MoE routing, this expert-wise bias is
+        # used only for Top-k selection. The unbiased router probabilities
+        # still determine mixture weights and adaptive-grouping statistics.
+        self.register_buffer(
+            '_router_selection_bias',
+            torch.zeros(num_experts, dtype=torch.float32),
+        )
         self.reset_diagnostics()
 
     def _load_from_state_dict(
@@ -157,11 +193,24 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             '_grouping_batches',
             '_expert_group_ids',
             '_grouping_finalized',
+            '_router_selection_bias',
         )
         for buffer_name in grouping_buffers:
             state_key = prefix + buffer_name
             if state_key not in state_dict:
                 state_dict[state_key] = getattr(self, buffer_name)
+        optional_module_state = []
+        if self.adaptive_shared_gate:
+            optional_module_state.append('shared_gate.weight')
+        if self.adaptive_residual_gate:
+            optional_module_state.extend(
+                ('_residual_scale_logit', 'residual_gate.weight')
+            )
+        current_state = self.state_dict()
+        for local_key in optional_module_state:
+            state_key = prefix + local_key
+            if state_key not in state_dict:
+                state_dict[state_key] = current_state[local_key]
         super(HypergraphConditionedSharedSparseMoE, self)._load_from_state_dict(
             state_dict,
             prefix,
@@ -186,8 +235,17 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self._diag_topk_counts = torch.zeros(self.num_experts, dtype=torch.long)
         self._diag_entropy_sum = 0.0
         self._diag_aux_sum = 0.0
+        self._diag_balance_proxy_sum = 0.0
         self._diag_shared_norm_sum = 0.0
         self._diag_routed_norm_sum = 0.0
+        self._diag_shared_gate_sum = 0.0
+        self._diag_shared_gate_sq_sum = 0.0
+        self._diag_shared_gate_min = float('inf')
+        self._diag_shared_gate_max = -float('inf')
+        self._diag_residual_gate_sum = 0.0
+        self._diag_residual_gate_sq_sum = 0.0
+        self._diag_residual_gate_min = float('inf')
+        self._diag_residual_gate_max = -float('inf')
 
     def _update_adaptive_grouping(self, gate_weights):
         if (
@@ -310,22 +368,30 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         _, pairs = solve((1 << self.num_experts) - 1)
         return [list(pair) for pair in pairs]
 
-    def _select_topk(self, gate_weights):
+    def _selection_scores(self, gate_weights):
+        if self.router_bias_update_rate == 0.0:
+            return gate_weights
+        return gate_weights + self._router_selection_bias.to(
+            device=gate_weights.device,
+            dtype=gate_weights.dtype,
+        )
+
+    def _select_topk(self, selection_scores):
         if (
             not self.adaptive_grouping
             or not bool(self._grouping_finalized.item())
         ):
-            return torch.topk(gate_weights, self.top_k, dim=-1)
+            return torch.topk(selection_scores, self.top_k, dim=-1)
 
-        group_ids = self._expert_group_ids.to(gate_weights.device)
+        group_ids = self._expert_group_ids.to(selection_scores.device)
         num_groups = int(group_ids.max().item()) + 1
         if num_groups < self.top_k:
-            return torch.topk(gate_weights, self.top_k, dim=-1)
+            return torch.topk(selection_scores, self.top_k, dim=-1)
 
         group_scores = []
         for group_index in range(num_groups):
             group_scores.append(
-                gate_weights[:, group_ids == group_index].max(dim=-1).values
+                selection_scores[:, group_ids == group_index].max(dim=-1).values
             )
         group_scores = torch.stack(group_scores, dim=-1)
         _, selected_groups = torch.topk(group_scores, self.top_k, dim=-1)
@@ -336,16 +402,49 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
                 group_ids.unsqueeze(0)
                 == selected_groups[:, slot_index].unsqueeze(1)
             )
-            candidate_scores = gate_weights.masked_fill(
+            candidate_scores = selection_scores.masked_fill(
                 ~membership,
-                torch.finfo(gate_weights.dtype).min,
+                torch.finfo(selection_scores.dtype).min,
             )
             selected_experts.append(candidate_scores.argmax(dim=-1))
         topk_indices = torch.stack(selected_experts, dim=-1)
-        topk_weights = gate_weights.gather(1, topk_indices)
-        return topk_weights, topk_indices
+        topk_scores = selection_scores.gather(1, topk_indices)
+        return topk_scores, topk_indices
 
-    def _record_diagnostics(self, gate_weights, topk_indices, aux_loss, shared_out, routed_out):
+    def _update_router_selection_bias(self, topk_indices):
+        if not self.training or self.router_bias_update_rate == 0.0:
+            return
+        with torch.no_grad():
+            expert_load = torch.bincount(
+                topk_indices.detach().reshape(-1),
+                minlength=self.num_experts,
+            ).to(self._router_selection_bias)
+            mean_load = expert_load.mean()
+            self._router_selection_bias.add_(
+                self.router_bias_update_rate * torch.sign(mean_load - expert_load)
+            )
+
+    @staticmethod
+    def _gate_summary(gate_values):
+        detached = gate_values.detach().double().reshape(-1)
+        return (
+            float(detached.sum().cpu().item()),
+            float(detached.square().sum().cpu().item()),
+            float(detached.min().cpu().item()),
+            float(detached.max().cpu().item()),
+        )
+
+    def _record_diagnostics(
+        self,
+        gate_weights,
+        topk_indices,
+        aux_loss,
+        balance_proxy,
+        shared_out,
+        routed_out,
+        shared_gate,
+        residual_gate,
+    ):
         if self.training:
             return
         sample_count = int(gate_weights.size(0))
@@ -359,12 +458,32 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         entropy = -(gate_weights * torch.log(gate_weights.clamp_min(1e-9))).sum(dim=-1)
         self._diag_entropy_sum += float(entropy.detach().sum().cpu().item())
         self._diag_aux_sum += float(aux_loss.detach().cpu().item()) * sample_count
+        self._diag_balance_proxy_sum += (
+            float(balance_proxy.detach().cpu().item()) * sample_count
+        )
         self._diag_shared_norm_sum += float(
             torch.linalg.vector_norm(shared_out.detach().float(), dim=-1).sum().cpu().item()
         )
         self._diag_routed_norm_sum += float(
             torch.linalg.vector_norm(routed_out.detach().float(), dim=-1).sum().cpu().item()
         )
+        if shared_gate is not None:
+            gate_sum, gate_sq_sum, gate_min, gate_max = self._gate_summary(shared_gate)
+            self._diag_shared_gate_sum += gate_sum
+            self._diag_shared_gate_sq_sum += gate_sq_sum
+            self._diag_shared_gate_min = min(self._diag_shared_gate_min, gate_min)
+            self._diag_shared_gate_max = max(self._diag_shared_gate_max, gate_max)
+        gate_sum, gate_sq_sum, gate_min, gate_max = self._gate_summary(residual_gate)
+        self._diag_residual_gate_sum += gate_sum
+        self._diag_residual_gate_sq_sum += gate_sq_sum
+        self._diag_residual_gate_min = min(self._diag_residual_gate_min, gate_min)
+        self._diag_residual_gate_max = max(self._diag_residual_gate_max, gate_max)
+
+    @staticmethod
+    def _mean_std(sum_value, square_sum, sample_count):
+        mean = sum_value / sample_count
+        variance = max(square_sum / sample_count - mean * mean, 0.0)
+        return mean, math.sqrt(variance)
 
     def diagnostics(self, reset=False):
         samples = max(self._diag_samples, 1)
@@ -382,6 +501,36 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             group_topk_fraction.append(
                 float(topk_fraction[group_ids == group_index].sum().item())
             )
+        base_shared_alpha = (
+            float(torch.sigmoid(self.shared_alpha.detach()).cpu().item())
+            if self.use_shared_expert else 0.0
+        )
+        if self._diag_samples and self.use_shared_expert:
+            shared_gate_mean, shared_gate_std = self._mean_std(
+                self._diag_shared_gate_sum,
+                self._diag_shared_gate_sq_sum,
+                samples,
+            )
+            shared_gate_min = self._diag_shared_gate_min
+            shared_gate_max = self._diag_shared_gate_max
+        else:
+            shared_gate_mean = base_shared_alpha
+            shared_gate_std = 0.0
+            shared_gate_min = base_shared_alpha
+            shared_gate_max = base_shared_alpha
+        if self._diag_samples:
+            residual_gate_mean, residual_gate_std = self._mean_std(
+                self._diag_residual_gate_sum,
+                self._diag_residual_gate_sq_sum,
+                samples,
+            )
+            residual_gate_min = self._diag_residual_gate_min
+            residual_gate_max = self._diag_residual_gate_max
+        else:
+            residual_gate_mean = self.residual_scale
+            residual_gate_std = 0.0
+            residual_gate_min = self.residual_scale
+            residual_gate_max = self.residual_scale
         result = {
             'samples': self._diag_samples,
             'top1_fraction': top1_fraction.tolist(),
@@ -393,12 +542,24 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             'active_experts': int((self._diag_topk_counts > 0).sum().item()),
             'max_top1_fraction': float(top1_fraction.max().item()),
             'balance_loss': self._diag_aux_sum / samples,
+            'balance_proxy': self._diag_balance_proxy_sum / samples,
             'shared_output_norm': self._diag_shared_norm_sum / samples,
             'routed_output_norm': self._diag_routed_norm_sum / samples,
-            'shared_alpha': (
-                float(torch.sigmoid(self.shared_alpha.detach()).cpu().item())
-                if self.use_shared_expert else 0.0
-            ),
+            'shared_alpha': shared_gate_mean,
+            'shared_gate_mean': shared_gate_mean,
+            'shared_gate_std': shared_gate_std,
+            'shared_gate_min': shared_gate_min,
+            'shared_gate_max': shared_gate_max,
+            'residual_gate_mean': residual_gate_mean,
+            'residual_gate_std': residual_gate_std,
+            'residual_gate_min': residual_gate_min,
+            'residual_gate_max': residual_gate_max,
+            'aux_loss_free': self.aux_loss_free,
+            'router_bias_update_rate': self.router_bias_update_rate,
+            'router_bias_min': float(self._router_selection_bias.min().cpu().item()),
+            'router_bias_max': float(self._router_selection_bias.max().cpu().item()),
+            'adaptive_shared_gate': self.adaptive_shared_gate,
+            'adaptive_residual_gate': self.adaptive_residual_gate,
             'expert_evaluations_per_sample': self.top_k + int(self.use_shared_expert),
             'single_adapter_mode': self.single_adapter_mode,
             'adaptive_grouping': self.adaptive_grouping,
@@ -421,13 +582,18 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
                 f'{tuple(final_state.shape)} and {tuple(local_state.shape)}'
             )
 
+        router_context = self._router_input(local_state, final_state)
         if self.single_adapter_mode:
+            normalized_context = router_context
             gate_weights = final_state.new_ones((final_state.size(0), 1))
         else:
-            router_input = self.router_norm(self._router_input(local_state, final_state))
-            gate_weights = F.softmax(self.router(router_input), dim=-1)
+            normalized_context = self.router_norm(router_context)
+            gate_weights = F.softmax(self.router(normalized_context), dim=-1)
         self._update_adaptive_grouping(gate_weights)
-        topk_weights, topk_indices = self._select_topk(gate_weights)
+        _, topk_indices = self._select_topk(self._selection_scores(gate_weights))
+        self._update_router_selection_bias(topk_indices)
+        # Selection bias must never change mixture weights or receive gradients.
+        topk_weights = gate_weights.gather(1, topk_indices)
         topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp_min(1e-9)
 
         expert_input = self.expert_norm(final_state)
@@ -446,18 +612,45 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
 
         if self.use_shared_expert:
             shared_out = self.shared_expert(expert_input)
-            shared_alpha = torch.sigmoid(self.shared_alpha).to(final_state.dtype)
+            shared_logits = self.shared_alpha
+            if self.adaptive_shared_gate:
+                shared_logits = shared_logits + self.shared_gate(normalized_context)
+            shared_alpha = torch.sigmoid(shared_logits).to(final_state.dtype)
+            if shared_alpha.ndim == 0:
+                shared_alpha = shared_alpha.expand(final_state.size(0), 1)
             moe_delta = shared_alpha * shared_out + (1.0 - shared_alpha) * routed_out
         else:
             shared_out = torch.zeros_like(routed_out)
+            shared_alpha = None
             moe_delta = routed_out
 
         top1_fraction = F.one_hot(
             topk_indices[:, 0], num_classes=self.num_experts
         ).float().mean(dim=0)
         mean_probability = gate_weights.mean(dim=0)
-        balance_loss = self.num_experts * torch.sum(top1_fraction * mean_probability)
-        self._record_diagnostics(
-            gate_weights, topk_indices, balance_loss, shared_out, routed_out
+        balance_proxy = self.num_experts * torch.sum(
+            top1_fraction * mean_probability
         )
-        return final_state + self.residual_scale * moe_delta, balance_loss
+        balance_loss = (
+            final_state.sum() * 0.0 if self.aux_loss_free else balance_proxy
+        )
+        if self.adaptive_residual_gate:
+            residual_scale = torch.sigmoid(
+                self._residual_scale_logit + self.residual_gate(normalized_context)
+            ).to(final_state.dtype)
+        else:
+            residual_scale = final_state.new_full(
+                (final_state.size(0), 1),
+                self.residual_scale,
+            )
+        self._record_diagnostics(
+            gate_weights,
+            topk_indices,
+            balance_loss,
+            balance_proxy,
+            shared_out,
+            routed_out,
+            shared_alpha,
+            residual_scale,
+        )
+        return final_state + residual_scale * moe_delta, balance_loss

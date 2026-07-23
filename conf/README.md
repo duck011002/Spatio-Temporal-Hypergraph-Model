@@ -36,6 +36,10 @@
 | |moe_group_warmup_steps|number of training batches used to collect routing statistics before grouping|
 | |moe_group_similarity_threshold|minimum routing co-activation cosine similarity for merging two expert groups|
 | |moe_target_num_groups|exact number of groups after warm-up; 0 uses similarity-threshold clustering, while half the expert count enables globally optimal expert pairing|
+| |moe_aux_loss_free|whether to return zero balancing loss and use non-gradient expert bias correction instead|
+| |moe_router_bias_update_rate|per-training-batch expert selection-bias update rate; 0 disables bias correction|
+| |moe_adaptive_shared_gate|whether each sample adaptively mixes the shared and routed expert outputs; initialized from moe_shared_alpha_init|
+| |moe_adaptive_residual_gate|whether each sample adaptively scales the MoE residual; initialized from moe_residual_scale, which must be between 0 and 1|
 |conv_args|num_attention_heads|the total number of attention heads|
 | |residual_beta|the residual weight of initial representation for gated residual module|
 | |learn_beta|whether to learn residual beta automatically|
