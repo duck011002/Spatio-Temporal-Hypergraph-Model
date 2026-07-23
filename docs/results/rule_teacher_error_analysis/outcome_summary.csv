@@ -1,0 +1,4 @@
+dataset,backbone,num_samples,target_in_top20,target_in_top20_fraction,model_rule_top1_disagree,model_rule_top1_disagree_fraction,teacher_changes_top1,teacher_changes_top1_fraction,base_top1_correct,final_top1_correct,corrected_top1,broken_top1,net_top1,kept_top1,improved_non_top1,worsened_non_top1,unchanged
+nyc,A4,1347,911,0.676317743132888,937,0.6956198960653304,407,0.3021529324424647,352,371,78,59,19,293,195,158,564
+ca,R0,2780,1342,0.4827338129496403,2073,0.74568345323741,304,0.1093525179856115,469,471,34,32,2,437,284,142,1851
+tky,R0,7038,4368,0.6206308610400681,4469,0.6349815288434214,837,0.11892583120204604,1822,1838,125,109,16,1713,719,601,3771

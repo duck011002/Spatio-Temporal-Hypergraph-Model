@@ -1,0 +1,44 @@
+{
+  "protocol": "Frozen candidates and frozen rule teacher. Margin thresholds are derived from validation only; test is used for reporting.",
+  "experiments": [
+    {
+      "dataset": "nyc",
+      "backbone": "A4",
+      "thresholds_from_validation": {
+        "model_margin_q25": 0.07665914240882382,
+        "model_margin_q50": 0.16404215818493967,
+        "final_margin_q50": 0.12674898804097023
+      },
+      "full_sample_csv": "server_artifacts\\rule_teacher_error_analysis\\nyc_a4_samples.csv",
+      "duration_s": 2.9028764000031515
+    },
+    {
+      "dataset": "ca",
+      "backbone": "R0",
+      "thresholds_from_validation": {
+        "model_margin_q25": 0.0852937871181777,
+        "model_margin_q50": 0.1868774475780851,
+        "final_margin_q50": 0.15585075339719445
+      },
+      "full_sample_csv": "server_artifacts\\rule_teacher_error_analysis\\ca_r0_samples.csv",
+      "duration_s": 9.49829960000352
+    },
+    {
+      "dataset": "tky",
+      "backbone": "R0",
+      "thresholds_from_validation": {
+        "model_margin_q25": 0.08989440656618525,
+        "model_margin_q50": 0.19818731499225506,
+        "final_margin_q50": 0.17604866792068902
+      },
+      "full_sample_csv": "server_artifacts\\rule_teacher_error_analysis\\tky_r0_samples.csv",
+      "duration_s": 11.631857500004116
+    }
+  ],
+  "outputs": {
+    "outcome_summary": "docs\\results\\rule_teacher_error_analysis\\outcome_summary.csv",
+    "llm_gate_summary": "docs\\results\\rule_teacher_error_analysis\\llm_gate_summary.csv",
+    "outcome_feature_summary": "docs\\results\\rule_teacher_error_analysis\\outcome_feature_summary.csv",
+    "representative_cases": "docs\\results\\rule_teacher_error_analysis\\representative_cases.csv"
+  }
+}
