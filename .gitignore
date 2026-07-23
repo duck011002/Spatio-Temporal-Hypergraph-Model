@@ -11,6 +11,7 @@ log/
 checkpoint/
 tensorboard/
 runs/
+rule_teacher_runs/
 server_artifacts/
 .tmp_psftp_artifacts.txt
 logs/
