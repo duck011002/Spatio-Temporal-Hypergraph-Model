@@ -201,13 +201,10 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         if bool(self._grouping_finalized.item()):
             return
 
-        sample_count = max(int(self._grouping_samples.item()), 1)
         gram = self._group_routing_gram.detach().cpu()
-        routing_sum = self._group_routing_sum.detach().cpu()
-        covariance = gram - torch.outer(routing_sum, routing_sum) / sample_count
-        variances = covariance.diag().clamp_min(0.0)
-        denominator = torch.sqrt(torch.outer(variances, variances)).clamp_min(1e-12)
-        similarity = (covariance / denominator).clamp(-1.0, 1.0)
+        routing_norms = gram.diag().clamp_min(0.0).sqrt()
+        denominator = torch.outer(routing_norms, routing_norms).clamp_min(1e-12)
+        similarity = (gram / denominator).clamp(0.0, 1.0)
         similarity.fill_diagonal_(1.0)
 
         groups = [[expert_index] for expert_index in range(self.num_experts)]

@@ -40,7 +40,7 @@ model_args:
   moe_loss_weight: 0.01
   moe_adaptive_grouping: true
   moe_group_warmup_steps: 3000
-  moe_group_similarity_threshold: 0.5
+  moe_group_similarity_threshold: 0.1
 seq_transformer_args:
   sequence_length: 20
   header_num: 2

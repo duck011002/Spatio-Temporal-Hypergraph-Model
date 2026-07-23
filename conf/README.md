@@ -33,7 +33,7 @@
 | |moe_loss_weight|weight of the expert load-balancing auxiliary loss|
 | |moe_adaptive_grouping|whether to cluster experts once after a routing-statistics warm-up and route Top-k across distinct groups|
 | |moe_group_warmup_steps|number of training batches used to collect routing statistics before grouping|
-| |moe_group_similarity_threshold|minimum centered routing-profile similarity for merging two expert groups|
+| |moe_group_similarity_threshold|minimum routing co-activation cosine similarity for merging two expert groups|
 |conv_args|num_attention_heads|the total number of attention heads|
 | |residual_beta|the residual weight of initial representation for gated residual module|
 | |learn_beta|whether to learn residual beta automatically|

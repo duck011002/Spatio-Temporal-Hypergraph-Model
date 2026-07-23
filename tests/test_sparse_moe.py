@@ -123,6 +123,33 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
             moe.top_k,
         )
 
+    def test_grouping_uses_uncentered_routing_coactivation(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=100,
+            group_similarity_threshold=0.8,
+        )
+        moe._group_routing_gram.copy_(
+            torch.tensor(
+                [
+                    [10.0, 9.0, 0.0, 0.0],
+                    [9.0, 10.0, 0.0, 0.0],
+                    [0.0, 0.0, 10.0, 0.0],
+                    [0.0, 0.0, 0.0, 10.0],
+                ]
+            )
+        )
+
+        moe._finalize_adaptive_groups()
+
+        self.assertEqual(moe._expert_group_ids.tolist(), [0, 0, 1, 2])
+
     def test_grouping_state_is_checkpointed_and_legacy_state_still_loads(self):
         source = HypergraphConditionedSharedSparseMoE(
             hidden_size=8,
