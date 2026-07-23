@@ -219,6 +219,9 @@ class STHGCN(nn.Module):
                 adaptive_residual_gate=bool(
                     getattr(cfg.model_args, 'moe_adaptive_residual_gate', False)
                 ),
+                residual_gate_max_delta=float(
+                    getattr(cfg.model_args, 'moe_residual_gate_max_delta', 0.0)
+                ),
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None

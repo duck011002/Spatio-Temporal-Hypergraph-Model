@@ -46,6 +46,7 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         router_bias_update_rate=0.0,
         adaptive_shared_gate=False,
         adaptive_residual_gate=False,
+        residual_gate_max_delta=0.0,
     ):
         super(HypergraphConditionedSharedSparseMoE, self).__init__()
         if num_experts < 1:
@@ -84,6 +85,16 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             raise ValueError(
                 'adaptive_residual_gate requires residual_scale strictly between 0 and 1'
             )
+        if residual_gate_max_delta < 0.0:
+            raise ValueError('residual_gate_max_delta must be non-negative')
+        if residual_gate_max_delta and not adaptive_residual_gate:
+            raise ValueError(
+                'residual_gate_max_delta requires adaptive_residual_gate'
+            )
+        if residual_gate_max_delta > min(residual_scale, 1.0 - residual_scale):
+            raise ValueError(
+                'residual_gate_max_delta keeps the bounded residual gate outside [0, 1]'
+            )
 
         self.hidden_size = hidden_size
         self.num_experts = num_experts
@@ -100,6 +111,7 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self.router_bias_update_rate = float(router_bias_update_rate)
         self.adaptive_shared_gate = bool(adaptive_shared_gate)
         self.adaptive_residual_gate = bool(adaptive_residual_gate)
+        self.residual_gate_max_delta = float(residual_gate_max_delta)
         router_input_size = (
             hidden_size * 3 if router_context == 'hypergraph' else hidden_size
         )
@@ -531,6 +543,22 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             residual_gate_std = 0.0
             residual_gate_min = self.residual_scale
             residual_gate_max = self.residual_scale
+        if self.adaptive_residual_gate and self.residual_gate_max_delta:
+            residual_gate_mode = 'bounded_tanh'
+            residual_gate_lower_bound = (
+                self.residual_scale - self.residual_gate_max_delta
+            )
+            residual_gate_upper_bound = (
+                self.residual_scale + self.residual_gate_max_delta
+            )
+        elif self.adaptive_residual_gate:
+            residual_gate_mode = 'sigmoid'
+            residual_gate_lower_bound = 0.0
+            residual_gate_upper_bound = 1.0
+        else:
+            residual_gate_mode = 'fixed'
+            residual_gate_lower_bound = self.residual_scale
+            residual_gate_upper_bound = self.residual_scale
         result = {
             'samples': self._diag_samples,
             'top1_fraction': top1_fraction.tolist(),
@@ -554,6 +582,10 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             'residual_gate_std': residual_gate_std,
             'residual_gate_min': residual_gate_min,
             'residual_gate_max': residual_gate_max,
+            'residual_gate_mode': residual_gate_mode,
+            'residual_gate_max_delta': self.residual_gate_max_delta,
+            'residual_gate_lower_bound': residual_gate_lower_bound,
+            'residual_gate_upper_bound': residual_gate_upper_bound,
             'aux_loss_free': self.aux_loss_free,
             'router_bias_update_rate': self.router_bias_update_rate,
             'router_bias_min': float(self._router_selection_bias.min().cpu().item()),
@@ -635,9 +667,17 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             final_state.sum() * 0.0 if self.aux_loss_free else balance_proxy
         )
         if self.adaptive_residual_gate:
-            residual_scale = torch.sigmoid(
-                self._residual_scale_logit + self.residual_gate(normalized_context)
-            ).to(final_state.dtype)
+            residual_gate_logits = self.residual_gate(normalized_context)
+            if self.residual_gate_max_delta:
+                residual_scale = (
+                    self.residual_scale
+                    + self.residual_gate_max_delta
+                    * torch.tanh(residual_gate_logits)
+                ).to(final_state.dtype)
+            else:
+                residual_scale = torch.sigmoid(
+                    self._residual_scale_logit + residual_gate_logits
+                ).to(final_state.dtype)
         else:
             residual_scale = final_state.new_full(
                 (final_state.size(0), 1),

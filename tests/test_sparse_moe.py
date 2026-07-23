@@ -340,6 +340,7 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
             residual_scale=0.5,
             adaptive_shared_gate=True,
             adaptive_residual_gate=True,
+            residual_gate_max_delta=0.15,
         )
         for expert in list(moe.experts) + [moe.shared_expert]:
             torch.nn.init.normal_(expert.up.weight, std=0.1)
@@ -355,6 +356,50 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
             float(torch.linalg.vector_norm(moe.residual_gate.weight.grad)),
             0.0,
         )
+
+    def test_bounded_residual_gate_stays_in_requested_interval(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            residual_scale=0.5,
+            adaptive_residual_gate=True,
+            residual_gate_max_delta=0.15,
+        )
+        with torch.no_grad():
+            moe.residual_gate.weight.zero_()
+            moe.residual_gate.weight[0, 0] = 10.0
+
+        moe.eval()
+        moe(torch.randn(64, 8), torch.randn(64, 8))
+        diagnostics = moe.diagnostics()
+
+        self.assertEqual(diagnostics['residual_gate_mode'], 'bounded_tanh')
+        self.assertAlmostEqual(
+            diagnostics['residual_gate_lower_bound'],
+            0.35,
+            places=6,
+        )
+        self.assertAlmostEqual(
+            diagnostics['residual_gate_upper_bound'],
+            0.65,
+            places=6,
+        )
+        self.assertGreaterEqual(diagnostics['residual_gate_min'], 0.35 - 1e-6)
+        self.assertLessEqual(diagnostics['residual_gate_max'], 0.65 + 1e-6)
+        self.assertGreater(diagnostics['residual_gate_std'], 0.0)
+
+    def test_bounded_residual_gate_rejects_invalid_range(self):
+        with self.assertRaises(ValueError):
+            HypergraphConditionedSharedSparseMoE(
+                hidden_size=8,
+                residual_scale=0.5,
+                adaptive_residual_gate=True,
+                residual_gate_max_delta=0.6,
+            )
 
 
 if __name__ == '__main__':

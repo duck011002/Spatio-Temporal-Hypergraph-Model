@@ -40,6 +40,7 @@
 | |moe_router_bias_update_rate|per-training-batch expert selection-bias update rate; 0 disables bias correction|
 | |moe_adaptive_shared_gate|whether each sample adaptively mixes the shared and routed expert outputs; initialized from moe_shared_alpha_init|
 | |moe_adaptive_residual_gate|whether each sample adaptively scales the MoE residual; initialized from moe_residual_scale, which must be between 0 and 1|
+| |moe_residual_gate_max_delta|when positive, replaces the unbounded-logit sigmoid residual gate with a tanh gate bounded to moe_residual_scale plus or minus this value|
 |conv_args|num_attention_heads|the total number of attention heads|
 | |residual_beta|the residual weight of initial representation for gated residual module|
 | |learn_beta|whether to learn residual beta automatically|

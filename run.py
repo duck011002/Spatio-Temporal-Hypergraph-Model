@@ -204,7 +204,8 @@ if __name__ == '__main__':
             'balance_weight=%s post_group_balance_weight=%s '
             'adaptive_grouping=%s group_warmup_steps=%s target_groups=%s '
             'aux_loss_free=%s router_bias_update_rate=%s '
-            'adaptive_shared_gate=%s adaptive_residual_gate=%s',
+            'adaptive_shared_gate=%s adaptive_residual_gate=%s '
+            'residual_gate_max_delta=%s',
             model.moe.router_context,
             model.moe.num_experts,
             model.moe.top_k,
@@ -218,6 +219,7 @@ if __name__ == '__main__':
             model.moe.router_bias_update_rate,
             model.moe.adaptive_shared_gate,
             model.moe.adaptive_residual_gate,
+            model.moe.residual_gate_max_delta,
         )
 
     if cfg.run_args.do_train:
