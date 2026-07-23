@@ -150,6 +150,37 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
 
         self.assertEqual(moe._expert_group_ids.tolist(), [0, 0, 1, 2])
 
+    def test_target_groups_use_globally_optimal_expert_pairs(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=100,
+            target_num_groups=2,
+        )
+        moe._group_routing_gram.copy_(
+            torch.tensor(
+                [
+                    [10.0, 1.0, 1.0, 9.0],
+                    [1.0, 10.0, 8.0, 1.0],
+                    [1.0, 8.0, 10.0, 1.0],
+                    [9.0, 1.0, 1.0, 10.0],
+                ]
+            )
+        )
+
+        moe._finalize_adaptive_groups()
+
+        self.assertEqual(moe._expert_group_ids.tolist(), [0, 1, 1, 0])
+        diagnostics = moe.diagnostics()
+        self.assertEqual(diagnostics['target_num_groups'], 2)
+        self.assertEqual(diagnostics['num_groups'], 2)
+        self.assertEqual(diagnostics['group_sizes'], [2, 2])
+
     def test_grouping_state_is_checkpointed_and_legacy_state_still_loads(self):
         source = HypergraphConditionedSharedSparseMoE(
             hidden_size=8,

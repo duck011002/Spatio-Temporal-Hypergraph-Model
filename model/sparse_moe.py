@@ -1,5 +1,6 @@
 import math
 import logging
+from functools import lru_cache
 
 import torch
 from torch import nn
@@ -40,6 +41,7 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         adaptive_grouping=False,
         group_warmup_steps=3000,
         group_similarity_threshold=0.5,
+        target_num_groups=0,
     ):
         super(HypergraphConditionedSharedSparseMoE, self).__init__()
         if num_experts < 1:
@@ -64,6 +66,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             raise ValueError('group_warmup_steps must be positive')
         if not -1.0 <= group_similarity_threshold <= 1.0:
             raise ValueError('group_similarity_threshold must be between -1 and 1')
+        if target_num_groups < 0 or target_num_groups > num_experts:
+            raise ValueError('target_num_groups must be between 0 and num_experts')
+        if target_num_groups and not adaptive_grouping:
+            raise ValueError('target_num_groups requires adaptive grouping')
+        if target_num_groups and target_num_groups < top_k:
+            raise ValueError('target_num_groups must be at least top_k')
 
         self.hidden_size = hidden_size
         self.num_experts = num_experts
@@ -75,6 +83,7 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self.adaptive_grouping = bool(adaptive_grouping)
         self.group_warmup_steps = int(group_warmup_steps)
         self.group_similarity_threshold = float(group_similarity_threshold)
+        self.target_num_groups = int(target_num_groups)
 
         if self.single_adapter_mode:
             # The control contains exactly one normalized low-rank adapter and
@@ -207,26 +216,48 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         similarity = (gram / denominator).clamp(0.0, 1.0)
         similarity.fill_diagonal_(1.0)
 
-        groups = [[expert_index] for expert_index in range(self.num_experts)]
-        while len(groups) > self.top_k:
-            best_pair = None
-            best_similarity = -float('inf')
-            for left_index in range(len(groups)):
-                for right_index in range(left_index + 1, len(groups)):
-                    pair_values = similarity[groups[left_index]][:, groups[right_index]]
-                    pair_similarity = float(pair_values.mean().item())
-                    if pair_similarity > best_similarity:
-                        best_similarity = pair_similarity
-                        best_pair = (left_index, right_index)
+        if self.target_num_groups * 2 == self.num_experts:
+            groups = self._optimal_pair_groups(similarity)
+        else:
+            groups = [[expert_index] for expert_index in range(self.num_experts)]
+            minimum_group_count = (
+                self.target_num_groups
+                if self.target_num_groups
+                else self.top_k
+            )
+            maximum_group_size = (
+                math.ceil(self.num_experts / self.target_num_groups)
+                if self.target_num_groups
+                else self.num_experts
+            )
+            while len(groups) > minimum_group_count:
+                best_pair = None
+                best_similarity = -float('inf')
+                for left_index in range(len(groups)):
+                    for right_index in range(left_index + 1, len(groups)):
+                        if (
+                            len(groups[left_index]) + len(groups[right_index])
+                            > maximum_group_size
+                        ):
+                            continue
+                        pair_values = similarity[groups[left_index]][:, groups[right_index]]
+                        pair_similarity = float(pair_values.mean().item())
+                        if pair_similarity > best_similarity:
+                            best_similarity = pair_similarity
+                            best_pair = (left_index, right_index)
 
-            if (
-                best_pair is None
-                or best_similarity < self.group_similarity_threshold
-            ):
-                break
-            left_index, right_index = best_pair
-            groups[left_index] = groups[left_index] + groups[right_index]
-            del groups[right_index]
+                if best_pair is None:
+                    raise RuntimeError(
+                        'unable to satisfy target_num_groups with balanced group sizes'
+                    )
+                if (
+                    not self.target_num_groups
+                    and best_similarity < self.group_similarity_threshold
+                ):
+                    break
+                left_index, right_index = best_pair
+                groups[left_index] = groups[left_index] + groups[right_index]
+                del groups[right_index]
 
         group_ids = torch.empty(self.num_experts, dtype=torch.long)
         for group_index, expert_indices in enumerate(groups):
@@ -234,10 +265,50 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self._expert_group_ids.copy_(group_ids.to(self._expert_group_ids.device))
         self._grouping_finalized.fill_(True)
         logging.info(
-            '[MoE] Adaptive expert grouping finalized after %s batches: %s',
+            '[MoE] Adaptive expert grouping finalized after %s batches '
+            '(target_groups=%s): %s',
             int(self._grouping_batches.item()),
+            self.target_num_groups or 'threshold',
             groups,
         )
+
+    def _optimal_pair_groups(self, similarity):
+        if self.num_experts % 2 != 0:
+            raise ValueError('optimal pair grouping requires an even number of experts')
+
+        @lru_cache(maxsize=None)
+        def solve(mask):
+            if mask == 0:
+                return 0.0, ()
+
+            first_bit = mask & -mask
+            first = first_bit.bit_length() - 1
+            remaining = mask ^ first_bit
+            best_score = -float('inf')
+            best_pairs = None
+
+            candidate_mask = remaining
+            while candidate_mask:
+                partner_bit = candidate_mask & -candidate_mask
+                partner = partner_bit.bit_length() - 1
+                tail_score, tail_pairs = solve(remaining ^ partner_bit)
+                score = float(similarity[first, partner].item()) + tail_score
+                pairs = ((first, partner),) + tail_pairs
+                if (
+                    score > best_score + 1e-12
+                    or (
+                        abs(score - best_score) <= 1e-12
+                        and (best_pairs is None or pairs < best_pairs)
+                    )
+                ):
+                    best_score = score
+                    best_pairs = pairs
+                candidate_mask ^= partner_bit
+
+            return best_score, best_pairs
+
+        _, pairs = solve((1 << self.num_experts) - 1)
+        return [list(pair) for pair in pairs]
 
     def _select_topk(self, gate_weights):
         if (
@@ -331,9 +402,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             'expert_evaluations_per_sample': self.top_k + int(self.use_shared_expert),
             'single_adapter_mode': self.single_adapter_mode,
             'adaptive_grouping': self.adaptive_grouping,
+            'target_num_groups': self.target_num_groups,
             'grouping_finalized': bool(self._grouping_finalized.item()),
             'grouping_batches': int(self._grouping_batches.item()),
             'expert_group_ids': group_ids.tolist(),
+            'num_groups': int(group_ids.max().item()) + 1,
+            'group_sizes': torch.bincount(group_ids).tolist(),
             'group_topk_fraction': group_topk_fraction,
         }
         if reset:

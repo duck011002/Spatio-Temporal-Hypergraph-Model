@@ -31,9 +31,11 @@
 | |moe_num_experts|number of routed low-rank experts; set to 1 with top_k=1 and no shared expert for the single-adapter control|
 | |moe_top_k|number of routed experts evaluated per sample|
 | |moe_loss_weight|weight of the expert load-balancing auxiliary loss|
+| |moe_post_group_loss_weight|load-balancing weight used after adaptive grouping is frozen; defaults to moe_loss_weight|
 | |moe_adaptive_grouping|whether to cluster experts once after a routing-statistics warm-up and route Top-k across distinct groups|
 | |moe_group_warmup_steps|number of training batches used to collect routing statistics before grouping|
 | |moe_group_similarity_threshold|minimum routing co-activation cosine similarity for merging two expert groups|
+| |moe_target_num_groups|exact number of groups after warm-up; 0 uses similarity-threshold clustering, while half the expert count enables globally optimal expert pairing|
 |conv_args|num_attention_heads|the total number of attention heads|
 | |residual_beta|the residual weight of initial representation for gated residual module|
 | |learn_beta|whether to learn residual beta automatically|

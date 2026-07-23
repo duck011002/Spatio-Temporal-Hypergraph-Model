@@ -201,14 +201,17 @@ if __name__ == '__main__':
     if getattr(model, 'use_moe', False):
         logging.info(
             '[MoE] Enabled: context=%s experts=%s top_k=%s rank=%s '
-            'balance_weight=%s adaptive_grouping=%s group_warmup_steps=%s',
+            'balance_weight=%s post_group_balance_weight=%s '
+            'adaptive_grouping=%s group_warmup_steps=%s target_groups=%s',
             model.moe.router_context,
             model.moe.num_experts,
             model.moe.top_k,
             cfg.model_args.moe_rank,
             model.moe_loss_weight,
+            model.moe_post_group_loss_weight,
             model.moe.adaptive_grouping,
-            model.moe.group_warmup_steps
+            model.moe.group_warmup_steps,
+            model.moe.target_num_groups,
         )
 
     if cfg.run_args.do_train:
@@ -292,6 +295,11 @@ if __name__ == '__main__':
                     summary_writer.add_scalar(
                         'train/moe_balance_loss_step',
                         float(model.last_moe_aux_loss.cpu().item()),
+                        global_step
+                    )
+                    summary_writer.add_scalar(
+                        'train/moe_balance_weight_step',
+                        float(model.last_moe_loss_weight),
                         global_step
                     )
 

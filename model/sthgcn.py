@@ -27,6 +27,14 @@ class STHGCN(nn.Module):
         self.embed_fusion_type = cfg.model_args.embed_fusion_type
         self.use_moe = bool(getattr(cfg.model_args, 'use_moe', False))
         self.moe_loss_weight = float(getattr(cfg.model_args, 'moe_loss_weight', 0.0))
+        self.moe_post_group_loss_weight = float(
+            getattr(
+                cfg.model_args,
+                'moe_post_group_loss_weight',
+                self.moe_loss_weight,
+            )
+        )
+        self.last_moe_loss_weight = 0.0
         self.checkin_embedding_layer = CheckinEmbedding(
             embed_size=cfg.model_args.embed_size,
             fusion_type=self.embed_fusion_type,
@@ -196,6 +204,9 @@ class STHGCN(nn.Module):
                 group_similarity_threshold=float(
                     getattr(cfg.model_args, 'moe_group_similarity_threshold', 0.5)
                 ),
+                target_num_groups=int(
+                    getattr(cfg.model_args, 'moe_target_num_groups', 0)
+                ),
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None
@@ -207,7 +218,18 @@ class STHGCN(nn.Module):
     def get_moe_diagnostics(self, reset=False):
         if not self.use_moe:
             return None
-        return self.moe.diagnostics(reset=reset)
+        diagnostics = self.moe.diagnostics(reset=reset)
+        diagnostics['balance_weight'] = self.current_moe_loss_weight()
+        return diagnostics
+
+    def current_moe_loss_weight(self):
+        if (
+            self.use_moe
+            and self.moe.adaptive_grouping
+            and bool(self.moe._grouping_finalized.item())
+        ):
+            return self.moe_post_group_loss_weight
+        return self.moe_loss_weight
 
     def forward(self, data, label=None, mode='train'):
         input_x = data['x']  # [?, 8]
@@ -303,6 +325,7 @@ class STHGCN(nn.Module):
 
         logits = self.linear(x)
         loss = self.loss_func(logits, label.long())
-        if self.use_moe and self.moe_loss_weight != 0.0:
-            loss = loss + self.moe_loss_weight * moe_aux_loss
+        self.last_moe_loss_weight = self.current_moe_loss_weight()
+        if self.use_moe and self.last_moe_loss_weight != 0.0:
+            loss = loss + self.last_moe_loss_weight * moe_aux_loss
         return logits, loss
