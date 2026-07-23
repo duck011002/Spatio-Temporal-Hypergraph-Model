@@ -55,6 +55,119 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.moe(torch.randn(5, 8), torch.randn(4, 8))
 
+    def test_single_adapter_mode_has_no_router_parameters(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=1,
+            top_k=1,
+            router_hidden_size=6,
+            dropout=0.0,
+            use_shared_expert=False,
+            residual_scale=0.5,
+        )
+        final_state = torch.randn(5, 8)
+        local_state = torch.randn(5, 8)
+        output, balance_loss = moe(final_state, local_state)
+
+        torch.testing.assert_close(output, final_state)
+        self.assertIsNone(moe.router)
+        self.assertFalse(any(name.startswith('router.') for name, _ in moe.named_parameters()))
+        self.assertEqual(float(balance_loss.item()), 1.0)
+
+        moe.eval()
+        moe(final_state, local_state)
+        diagnostics = moe.diagnostics()
+        self.assertTrue(diagnostics['single_adapter_mode'])
+        self.assertEqual(diagnostics['expert_evaluations_per_sample'], 1)
+        self.assertEqual(diagnostics['active_experts'], 1)
+
+    def test_grouped_top2_selects_experts_from_different_groups(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=1,
+        )
+        moe._expert_group_ids.copy_(torch.tensor([0, 0, 1, 1]))
+        moe._grouping_finalized.fill_(True)
+        gate_weights = torch.tensor([[0.50, 0.40, 0.06, 0.04]])
+
+        _, topk_indices = moe._select_topk(gate_weights)
+
+        self.assertEqual(topk_indices.tolist(), [[0, 2]])
+
+    def test_adaptive_grouping_finalizes_after_warmup(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=1,
+            group_similarity_threshold=0.5,
+        )
+        moe.train()
+        moe(torch.randn(9, 8), torch.randn(9, 8))
+
+        self.assertTrue(bool(moe._grouping_finalized.item()))
+        self.assertEqual(int(moe._grouping_batches.item()), 1)
+        self.assertGreaterEqual(
+            len(torch.unique(moe._expert_group_ids)),
+            moe.top_k,
+        )
+
+    def test_grouping_state_is_checkpointed_and_legacy_state_still_loads(self):
+        source = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=1,
+        )
+        source._expert_group_ids.copy_(torch.tensor([0, 0, 1, 1]))
+        source._grouping_finalized.fill_(True)
+        state_dict = source.state_dict()
+
+        restored = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            adaptive_grouping=True,
+            group_warmup_steps=1,
+        )
+        restored.load_state_dict(state_dict)
+        self.assertEqual(restored._expert_group_ids.tolist(), [0, 0, 1, 1])
+        self.assertTrue(bool(restored._grouping_finalized.item()))
+
+        legacy_state = {
+            key: value
+            for key, value in state_dict.items()
+            if not key.startswith('_group')
+            and key != '_expert_group_ids'
+        }
+        legacy_target = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+        )
+        legacy_target.load_state_dict(legacy_state)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -27,6 +27,13 @@
 | |do_traj2traj|whether to use hyperedge2hyperedge collaboration|
 | |distance_encoder_type|encoder type of distance, choose from 'time', 'hstlstm', 'stan' and 'simple'. Specially, 'time' means using the TimeEncoder to handle distance value|
 | |quantile|clip the maximum distance value with clip(0, max_d*quantile), should modify the code in dataset/lbsn_dataset to make this work|
+| |use_moe|whether to enable the residual sparse MoE module|
+| |moe_num_experts|number of routed low-rank experts; set to 1 with top_k=1 and no shared expert for the single-adapter control|
+| |moe_top_k|number of routed experts evaluated per sample|
+| |moe_loss_weight|weight of the expert load-balancing auxiliary loss|
+| |moe_adaptive_grouping|whether to cluster experts once after a routing-statistics warm-up and route Top-k across distinct groups|
+| |moe_group_warmup_steps|number of training batches used to collect routing statistics before grouping|
+| |moe_group_similarity_threshold|minimum centered routing-profile similarity for merging two expert groups|
 |conv_args|num_attention_heads|the total number of attention heads|
 | |residual_beta|the residual weight of initial representation for gated residual module|
 | |learn_beta|whether to learn residual beta automatically|

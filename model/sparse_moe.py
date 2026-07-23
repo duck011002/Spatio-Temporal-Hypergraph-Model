@@ -1,4 +1,5 @@
 import math
+import logging
 
 import torch
 from torch import nn
@@ -36,12 +37,19 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         shared_alpha_init=0.15,
         residual_scale=1.0,
         router_context='hypergraph',
+        adaptive_grouping=False,
+        group_warmup_steps=3000,
+        group_similarity_threshold=0.5,
     ):
         super(HypergraphConditionedSharedSparseMoE, self).__init__()
-        if num_experts < 2:
-            raise ValueError('num_experts must be at least 2')
+        if num_experts < 1:
+            raise ValueError('num_experts must be at least 1')
         if top_k < 1 or top_k > num_experts:
             raise ValueError('top_k must be between 1 and num_experts')
+        if num_experts == 1 and top_k != 1:
+            raise ValueError('single-adapter mode requires top_k=1')
+        if num_experts == 1 and use_shared_expert:
+            raise ValueError('single-adapter mode must disable the shared expert')
         if rank < 1:
             raise ValueError('rank must be positive')
         if router_hidden_size < 1:
@@ -50,6 +58,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             raise ValueError('shared_alpha_init must be strictly between 0 and 1')
         if router_context not in ('local', 'final', 'hypergraph'):
             raise ValueError("router_context must be 'local', 'final', or 'hypergraph'")
+        if adaptive_grouping and num_experts <= top_k:
+            raise ValueError('adaptive grouping requires num_experts > top_k')
+        if group_warmup_steps < 1:
+            raise ValueError('group_warmup_steps must be positive')
+        if not -1.0 <= group_similarity_threshold <= 1.0:
+            raise ValueError('group_similarity_threshold must be between -1 and 1')
 
         self.hidden_size = hidden_size
         self.num_experts = num_experts
@@ -57,15 +71,25 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self.use_shared_expert = bool(use_shared_expert)
         self.residual_scale = float(residual_scale)
         self.router_context = router_context
+        self.single_adapter_mode = num_experts == 1
+        self.adaptive_grouping = bool(adaptive_grouping)
+        self.group_warmup_steps = int(group_warmup_steps)
+        self.group_similarity_threshold = float(group_similarity_threshold)
 
-        router_input_size = hidden_size * 3 if router_context == 'hypergraph' else hidden_size
-        self.router_norm = nn.LayerNorm(router_input_size)
-        self.router = nn.Sequential(
-            nn.Linear(router_input_size, router_hidden_size),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(router_hidden_size, num_experts),
-        )
+        if self.single_adapter_mode:
+            # The control contains exactly one normalized low-rank adapter and
+            # no unused router parameters.
+            self.router_norm = nn.Identity()
+            self.router = None
+        else:
+            router_input_size = hidden_size * 3 if router_context == 'hypergraph' else hidden_size
+            self.router_norm = nn.LayerNorm(router_input_size)
+            self.router = nn.Sequential(
+                nn.Linear(router_input_size, router_hidden_size),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(router_hidden_size, num_experts),
+            )
         self.expert_norm = nn.LayerNorm(hidden_size)
         self.experts = nn.ModuleList(
             LowRankAdapter(hidden_size, rank, dropout) for _ in range(num_experts)
@@ -74,7 +98,70 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             self.shared_expert = LowRankAdapter(hidden_size, rank, dropout)
             alpha_logit = math.log(shared_alpha_init / (1.0 - shared_alpha_init))
             self.shared_alpha = nn.Parameter(torch.tensor(alpha_logit, dtype=torch.float32))
+
+        # Adaptive grouping keeps all experts. During a short warm-up it stores
+        # only O(E^2) routing statistics, then clusters experts once and freezes
+        # the assignment for the rest of training and inference.
+        self.register_buffer(
+            '_group_routing_gram',
+            torch.zeros(num_experts, num_experts, dtype=torch.float32),
+        )
+        self.register_buffer(
+            '_group_routing_sum',
+            torch.zeros(num_experts, dtype=torch.float32),
+        )
+        self.register_buffer(
+            '_grouping_samples',
+            torch.zeros((), dtype=torch.long),
+        )
+        self.register_buffer(
+            '_grouping_batches',
+            torch.zeros((), dtype=torch.long),
+        )
+        self.register_buffer(
+            '_expert_group_ids',
+            torch.arange(num_experts, dtype=torch.long),
+        )
+        self.register_buffer(
+            '_grouping_finalized',
+            torch.tensor(not self.adaptive_grouping, dtype=torch.bool),
+        )
         self.reset_diagnostics()
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        # R1 checkpoints created before adaptive grouping do not contain these
+        # buffers. Supplying current defaults preserves strict legacy loading,
+        # while new checkpoints retain finalized expert assignments.
+        grouping_buffers = (
+            '_group_routing_gram',
+            '_group_routing_sum',
+            '_grouping_samples',
+            '_grouping_batches',
+            '_expert_group_ids',
+            '_grouping_finalized',
+        )
+        for buffer_name in grouping_buffers:
+            state_key = prefix + buffer_name
+            if state_key not in state_dict:
+                state_dict[state_key] = getattr(self, buffer_name)
+        super(HypergraphConditionedSharedSparseMoE, self)._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
 
     def _router_input(self, local_state, final_state):
         if self.router_context == 'local':
@@ -92,6 +179,103 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self._diag_aux_sum = 0.0
         self._diag_shared_norm_sum = 0.0
         self._diag_routed_norm_sum = 0.0
+
+    def _update_adaptive_grouping(self, gate_weights):
+        if (
+            not self.training
+            or not self.adaptive_grouping
+            or bool(self._grouping_finalized.item())
+        ):
+            return
+
+        with torch.no_grad():
+            routing = gate_weights.detach().float()
+            self._group_routing_gram.add_(routing.transpose(0, 1).matmul(routing))
+            self._group_routing_sum.add_(routing.sum(dim=0))
+            self._grouping_samples.add_(routing.size(0))
+            self._grouping_batches.add_(1)
+            if int(self._grouping_batches.item()) >= self.group_warmup_steps:
+                self._finalize_adaptive_groups()
+
+    def _finalize_adaptive_groups(self):
+        if bool(self._grouping_finalized.item()):
+            return
+
+        sample_count = max(int(self._grouping_samples.item()), 1)
+        gram = self._group_routing_gram.detach().cpu()
+        routing_sum = self._group_routing_sum.detach().cpu()
+        covariance = gram - torch.outer(routing_sum, routing_sum) / sample_count
+        variances = covariance.diag().clamp_min(0.0)
+        denominator = torch.sqrt(torch.outer(variances, variances)).clamp_min(1e-12)
+        similarity = (covariance / denominator).clamp(-1.0, 1.0)
+        similarity.fill_diagonal_(1.0)
+
+        groups = [[expert_index] for expert_index in range(self.num_experts)]
+        while len(groups) > self.top_k:
+            best_pair = None
+            best_similarity = -float('inf')
+            for left_index in range(len(groups)):
+                for right_index in range(left_index + 1, len(groups)):
+                    pair_values = similarity[groups[left_index]][:, groups[right_index]]
+                    pair_similarity = float(pair_values.mean().item())
+                    if pair_similarity > best_similarity:
+                        best_similarity = pair_similarity
+                        best_pair = (left_index, right_index)
+
+            if (
+                best_pair is None
+                or best_similarity < self.group_similarity_threshold
+            ):
+                break
+            left_index, right_index = best_pair
+            groups[left_index] = groups[left_index] + groups[right_index]
+            del groups[right_index]
+
+        group_ids = torch.empty(self.num_experts, dtype=torch.long)
+        for group_index, expert_indices in enumerate(groups):
+            group_ids[expert_indices] = group_index
+        self._expert_group_ids.copy_(group_ids.to(self._expert_group_ids.device))
+        self._grouping_finalized.fill_(True)
+        logging.info(
+            '[MoE] Adaptive expert grouping finalized after %s batches: %s',
+            int(self._grouping_batches.item()),
+            groups,
+        )
+
+    def _select_topk(self, gate_weights):
+        if (
+            not self.adaptive_grouping
+            or not bool(self._grouping_finalized.item())
+        ):
+            return torch.topk(gate_weights, self.top_k, dim=-1)
+
+        group_ids = self._expert_group_ids.to(gate_weights.device)
+        num_groups = int(group_ids.max().item()) + 1
+        if num_groups < self.top_k:
+            return torch.topk(gate_weights, self.top_k, dim=-1)
+
+        group_scores = []
+        for group_index in range(num_groups):
+            group_scores.append(
+                gate_weights[:, group_ids == group_index].max(dim=-1).values
+            )
+        group_scores = torch.stack(group_scores, dim=-1)
+        _, selected_groups = torch.topk(group_scores, self.top_k, dim=-1)
+
+        selected_experts = []
+        for slot_index in range(self.top_k):
+            membership = (
+                group_ids.unsqueeze(0)
+                == selected_groups[:, slot_index].unsqueeze(1)
+            )
+            candidate_scores = gate_weights.masked_fill(
+                ~membership,
+                torch.finfo(gate_weights.dtype).min,
+            )
+            selected_experts.append(candidate_scores.argmax(dim=-1))
+        topk_indices = torch.stack(selected_experts, dim=-1)
+        topk_weights = gate_weights.gather(1, topk_indices)
+        return topk_weights, topk_indices
 
     def _record_diagnostics(self, gate_weights, topk_indices, aux_loss, shared_out, routed_out):
         if self.training:
@@ -116,13 +300,30 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
 
     def diagnostics(self, reset=False):
         samples = max(self._diag_samples, 1)
+        top1_fraction = self._diag_top1_counts.float() / samples
+        topk_fraction = (
+            self._diag_topk_counts.float()
+            / max(self._diag_samples * self.top_k, 1)
+        )
+        router_entropy = self._diag_entropy_sum / samples
+        max_entropy = math.log(self.num_experts) if self.num_experts > 1 else 0.0
+        group_ids = self._expert_group_ids.detach().cpu()
+        num_groups = int(group_ids.max().item()) + 1
+        group_topk_fraction = []
+        for group_index in range(num_groups):
+            group_topk_fraction.append(
+                float(topk_fraction[group_ids == group_index].sum().item())
+            )
         result = {
             'samples': self._diag_samples,
-            'top1_fraction': (self._diag_top1_counts.float() / samples).tolist(),
-            'topk_fraction': (
-                self._diag_topk_counts.float() / max(self._diag_samples * self.top_k, 1)
-            ).tolist(),
-            'router_entropy': self._diag_entropy_sum / samples,
+            'top1_fraction': top1_fraction.tolist(),
+            'topk_fraction': topk_fraction.tolist(),
+            'router_entropy': router_entropy,
+            'normalized_router_entropy': (
+                router_entropy / max_entropy if max_entropy > 0.0 else 0.0
+            ),
+            'active_experts': int((self._diag_topk_counts > 0).sum().item()),
+            'max_top1_fraction': float(top1_fraction.max().item()),
             'balance_loss': self._diag_aux_sum / samples,
             'shared_output_norm': self._diag_shared_norm_sum / samples,
             'routed_output_norm': self._diag_routed_norm_sum / samples,
@@ -131,6 +332,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
                 if self.use_shared_expert else 0.0
             ),
             'expert_evaluations_per_sample': self.top_k + int(self.use_shared_expert),
+            'single_adapter_mode': self.single_adapter_mode,
+            'adaptive_grouping': self.adaptive_grouping,
+            'grouping_finalized': bool(self._grouping_finalized.item()),
+            'grouping_batches': int(self._grouping_batches.item()),
+            'expert_group_ids': group_ids.tolist(),
+            'group_topk_fraction': group_topk_fraction,
         }
         if reset:
             self.reset_diagnostics()
@@ -143,9 +350,13 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
                 f'{tuple(final_state.shape)} and {tuple(local_state.shape)}'
             )
 
-        router_input = self.router_norm(self._router_input(local_state, final_state))
-        gate_weights = F.softmax(self.router(router_input), dim=-1)
-        topk_weights, topk_indices = torch.topk(gate_weights, self.top_k, dim=-1)
+        if self.single_adapter_mode:
+            gate_weights = final_state.new_ones((final_state.size(0), 1))
+        else:
+            router_input = self.router_norm(self._router_input(local_state, final_state))
+            gate_weights = F.softmax(self.router(router_input), dim=-1)
+        self._update_adaptive_grouping(gate_weights)
+        topk_weights, topk_indices = self._select_topk(gate_weights)
         topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp_min(1e-9)
 
         expert_input = self.expert_norm(final_state)

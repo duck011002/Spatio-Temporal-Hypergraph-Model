@@ -200,12 +200,15 @@ if __name__ == '__main__':
     logging.info(f'[Training] #Parameters: {count_parameters(model)}')
     if getattr(model, 'use_moe', False):
         logging.info(
-            '[MoE] Enabled: context=%s experts=%s top_k=%s rank=%s balance_weight=%s',
+            '[MoE] Enabled: context=%s experts=%s top_k=%s rank=%s '
+            'balance_weight=%s adaptive_grouping=%s group_warmup_steps=%s',
             model.moe.router_context,
             model.moe.num_experts,
             model.moe.top_k,
             cfg.model_args.moe_rank,
-            model.moe_loss_weight
+            model.moe_loss_weight,
+            model.moe.adaptive_grouping,
+            model.moe.group_warmup_steps
         )
 
     if cfg.run_args.do_train:

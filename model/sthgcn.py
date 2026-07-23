@@ -187,6 +187,15 @@ class STHGCN(nn.Module):
                 router_context=str(
                     getattr(cfg.model_args, 'moe_router_context', 'hypergraph')
                 ),
+                adaptive_grouping=bool(
+                    getattr(cfg.model_args, 'moe_adaptive_grouping', False)
+                ),
+                group_warmup_steps=int(
+                    getattr(cfg.model_args, 'moe_group_warmup_steps', 3000)
+                ),
+                group_similarity_threshold=float(
+                    getattr(cfg.model_args, 'moe_group_similarity_threshold', 0.5)
+                ),
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None
