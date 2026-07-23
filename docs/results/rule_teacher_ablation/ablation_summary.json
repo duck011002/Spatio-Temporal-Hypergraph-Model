@@ -1,0 +1,75 @@
+{
+  "protocol": "Frozen Top-20 candidates, frozen full-teacher weights, frozen dataset-specific lambda; no post-test retuning.",
+  "experiments": [
+    {
+      "dataset": "nyc",
+      "backbone": "A4",
+      "candidate_dir": "server_artifacts\\nyc_rule_teacher_20260723\\nyc_a4",
+      "ablation_csv": "docs\\results\\rule_teacher_ablation\\nyc_a4_ablation.csv",
+      "lambda_sensitivity_csv": "docs\\results\\rule_teacher_ablation\\nyc_a4_lambda_sensitivity.csv",
+      "num_validation_samples": 1400,
+      "num_test_samples": 1347,
+      "previous_context_coverage": {
+        "validation": 1.0,
+        "test": 1.0
+      },
+      "frozen_rule_strength": 0.5,
+      "frozen_weights": {
+        "spatial": 0.3098617525092863,
+        "temporal": 0.29802001290645797,
+        "category_transition": 0.020829971234617467,
+        "user_preference": 0.3597163214589122,
+        "popularity": 0.011571941890725981
+      },
+      "best_frozen_weight_strength_on_validation": 0.5,
+      "duration_s": 2.6469033999965177
+    },
+    {
+      "dataset": "ca",
+      "backbone": "R0",
+      "candidate_dir": "server_artifacts\\rule_teacher_cross_dataset_20260723\\ca_r0",
+      "ablation_csv": "docs\\results\\rule_teacher_ablation\\ca_r0_ablation.csv",
+      "lambda_sensitivity_csv": "docs\\results\\rule_teacher_ablation\\ca_r0_lambda_sensitivity.csv",
+      "num_validation_samples": 3529,
+      "num_test_samples": 2780,
+      "previous_context_coverage": {
+        "validation": 1.0,
+        "test": 1.0
+      },
+      "frozen_rule_strength": 0.25,
+      "frozen_weights": {
+        "spatial": 0.26774796973030857,
+        "temporal": 0.34117512657442334,
+        "category_transition": 0.018000778587927497,
+        "user_preference": 0.37015325599626697,
+        "popularity": 0.0029228691110735907
+      },
+      "best_frozen_weight_strength_on_validation": 0.25,
+      "duration_s": 8.404156299999158
+    },
+    {
+      "dataset": "tky",
+      "backbone": "R0",
+      "candidate_dir": "server_artifacts\\rule_teacher_cross_dataset_20260723\\tky_r0",
+      "ablation_csv": "docs\\results\\rule_teacher_ablation\\tky_r0_ablation.csv",
+      "lambda_sensitivity_csv": "docs\\results\\rule_teacher_ablation\\tky_r0_lambda_sensitivity.csv",
+      "num_validation_samples": 6868,
+      "num_test_samples": 7038,
+      "previous_context_coverage": {
+        "validation": 1.0,
+        "test": 1.0
+      },
+      "frozen_rule_strength": 0.2,
+      "frozen_weights": {
+        "spatial": 0.0,
+        "temporal": 0.0,
+        "category_transition": 0.0,
+        "user_preference": 1.0,
+        "popularity": 0.0
+      },
+      "best_frozen_weight_strength_on_validation": 0.2,
+      "duration_s": 16.52802900000097
+    }
+  ],
+  "combined_ablation_csv": "docs\\results\\rule_teacher_ablation\\combined_ablation.csv"
+}
