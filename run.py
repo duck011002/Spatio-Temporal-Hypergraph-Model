@@ -283,6 +283,7 @@ if __name__ == '__main__':
                 data = data.to(device)
                 input_data = {
                     'x': data.x,
+                    'x_target': data.x_target,
                     'edge_index': data.adjs_t,
                     'edge_attr': data.edge_attrs,
                     'split_index': split_index,

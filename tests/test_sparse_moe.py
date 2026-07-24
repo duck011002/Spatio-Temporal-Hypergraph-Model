@@ -401,6 +401,128 @@ class HypergraphConditionedSharedSparseMoETest(unittest.TestCase):
                 residual_gate_max_delta=0.6,
             )
 
+    def test_hsid_lite_hashes_hierarchical_regions_deterministically(self):
+        coords = torch.tensor(
+            [
+                [-73.9857, 40.7484],
+                [-73.9857, 40.7484],
+                [-73.9957, 40.7584],
+                [float('nan'), 40.0],
+            ]
+        )
+
+        coarse = self.moe._hashed_grid_ids(coords, 0.1, 2048)
+        fine = self.moe._hashed_grid_ids(coords, 0.001, 16384)
+
+        self.assertEqual(int(coarse[0]), int(coarse[1]))
+        self.assertEqual(int(fine[0]), int(fine[1]))
+        self.assertNotEqual(int(fine[0]), int(fine[2]))
+        self.assertEqual(int(coarse[3]), 0)
+        self.assertEqual(int(fine[3]), 0)
+
+    def test_hsid_lite_requires_leak_free_region_context(self):
+        moe = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            use_hsid_lite=True,
+        )
+
+        with self.assertRaisesRegex(ValueError, 'region_coords'):
+            moe(torch.randn(5, 8), torch.randn(5, 8))
+
+    def test_hsid_lite_starts_as_exact_base_router_and_learns_spatial_logits(self):
+        base = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+        )
+        hsid = HypergraphConditionedSharedSparseMoE(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            use_hsid_lite=True,
+            region_embed_size=4,
+            coarse_region_buckets=32,
+            fine_region_buckets=64,
+        )
+        hsid.load_state_dict(base.state_dict())
+        final_state = torch.randn(5, 8)
+        local_state = torch.randn(5, 8)
+        coords = torch.tensor(
+            [
+                [-73.98, 40.74],
+                [-73.99, 40.75],
+                [-74.00, 40.76],
+                [-73.97, 40.73],
+                [-73.96, 40.72],
+            ]
+        )
+        context = base._router_input(local_state, final_state)
+        base_logits = base.router(base.router_norm(context))
+        hsid_logits = (
+            hsid.router(hsid.router_norm(context))
+            + hsid._region_router_logits(coords)
+        )
+
+        torch.testing.assert_close(hsid_logits, base_logits)
+        self.assertEqual(int(torch.count_nonzero(hsid.region_router.weight)), 0)
+
+        with torch.no_grad():
+            torch.nn.init.normal_(hsid.region_router.weight, std=0.1)
+        spatial_logits = hsid._region_router_logits(coords)
+        spatial_logits.square().mean().backward()
+
+        self.assertGreater(
+            float(torch.linalg.vector_norm(hsid.region_router.weight.grad)),
+            0.0,
+        )
+        self.assertGreater(
+            float(torch.linalg.vector_norm(
+                hsid.coarse_region_embedding.weight.grad
+            )),
+            0.0,
+        )
+        self.assertGreater(
+            float(torch.linalg.vector_norm(
+                hsid.fine_region_embedding.weight.grad
+            )),
+            0.0,
+        )
+
+    def test_hsid_lite_preserves_common_parameter_initialization(self):
+        kwargs = dict(
+            hidden_size=8,
+            rank=3,
+            num_experts=4,
+            top_k=2,
+            router_hidden_size=6,
+            dropout=0.0,
+            residual_scale=0.5,
+            adaptive_shared_gate=True,
+            adaptive_residual_gate=True,
+        )
+        torch.manual_seed(23)
+        base = HypergraphConditionedSharedSparseMoE(**kwargs)
+        torch.manual_seed(23)
+        hsid = HypergraphConditionedSharedSparseMoE(
+            **kwargs,
+            use_hsid_lite=True,
+        )
+
+        hsid_state = hsid.state_dict()
+        for name, value in base.state_dict().items():
+            torch.testing.assert_close(hsid_state[name], value)
+
 
 if __name__ == '__main__':
     unittest.main()

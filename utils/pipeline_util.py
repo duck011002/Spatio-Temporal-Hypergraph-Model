@@ -56,6 +56,7 @@ def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=Tru
 
             input_data = {
                 'x': row.x,
+                'x_target': row.x_target,
                 'edge_index': row.adjs_t,
                 'edge_attr': row.edge_attrs,
                 'split_index': split_index,

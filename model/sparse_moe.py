@@ -47,6 +47,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         adaptive_shared_gate=False,
         adaptive_residual_gate=False,
         residual_gate_max_delta=0.0,
+        use_hsid_lite=False,
+        region_embed_size=16,
+        coarse_region_degrees=0.1,
+        fine_region_degrees=0.001,
+        coarse_region_buckets=2048,
+        fine_region_buckets=16384,
     ):
         super(HypergraphConditionedSharedSparseMoE, self).__init__()
         if num_experts < 1:
@@ -95,6 +101,14 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             raise ValueError(
                 'residual_gate_max_delta keeps the bounded residual gate outside [0, 1]'
             )
+        if use_hsid_lite and num_experts == 1:
+            raise ValueError('HSID-lite requires more than one routed expert')
+        if region_embed_size < 1:
+            raise ValueError('region_embed_size must be positive')
+        if coarse_region_degrees <= 0.0 or fine_region_degrees <= 0.0:
+            raise ValueError('region grid sizes must be positive')
+        if coarse_region_buckets < 1 or fine_region_buckets < 1:
+            raise ValueError('region bucket counts must be positive')
 
         self.hidden_size = hidden_size
         self.num_experts = num_experts
@@ -112,6 +126,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
         self.adaptive_shared_gate = bool(adaptive_shared_gate)
         self.adaptive_residual_gate = bool(adaptive_residual_gate)
         self.residual_gate_max_delta = float(residual_gate_max_delta)
+        self.use_hsid_lite = bool(use_hsid_lite)
+        self.region_embed_size = int(region_embed_size)
+        self.coarse_region_degrees = float(coarse_region_degrees)
+        self.fine_region_degrees = float(fine_region_degrees)
+        self.coarse_region_buckets = int(coarse_region_buckets)
+        self.fine_region_buckets = int(fine_region_buckets)
         router_input_size = (
             hidden_size * 3 if router_context == 'hypergraph' else hidden_size
         )
@@ -148,6 +168,30 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             )
             self.residual_gate = nn.Linear(router_input_size, 1, bias=False)
             nn.init.zeros_(self.residual_gate.weight)
+        if self.use_hsid_lite:
+            # Create treatment-only parameters after all common modules so a
+            # fixed seed preserves every base-model parameter initialization.
+            self.coarse_region_embedding = nn.Embedding(
+                self.coarse_region_buckets + 1,
+                self.region_embed_size,
+                padding_idx=0,
+            )
+            self.fine_region_embedding = nn.Embedding(
+                self.fine_region_buckets + 1,
+                self.region_embed_size,
+                padding_idx=0,
+            )
+            self.region_router_norm = nn.LayerNorm(
+                self.region_embed_size * 2
+            )
+            self.region_router = nn.Linear(
+                self.region_embed_size * 2,
+                num_experts,
+                bias=False,
+            )
+            # The HSID-lite treatment starts from the exact base-router logits
+            # and learns only an additive spatial routing signal.
+            nn.init.zeros_(self.region_router.weight)
 
         # Adaptive grouping keeps all experts. During a short warm-up it stores
         # only O(E^2) routing statistics, then clusters experts once and freezes
@@ -218,6 +262,16 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             optional_module_state.extend(
                 ('_residual_scale_logit', 'residual_gate.weight')
             )
+        if self.use_hsid_lite:
+            optional_module_state.extend(
+                (
+                    'coarse_region_embedding.weight',
+                    'fine_region_embedding.weight',
+                    'region_router_norm.weight',
+                    'region_router_norm.bias',
+                    'region_router.weight',
+                )
+            )
         current_state = self.state_dict()
         for local_key in optional_module_state:
             state_key = prefix + local_key
@@ -240,6 +294,58 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             return final_state
         collaboration_delta = final_state - local_state
         return torch.cat([local_state, final_state, collaboration_delta], dim=-1)
+
+    @staticmethod
+    def _hashed_grid_ids(region_coords, cell_degrees, num_buckets):
+        """Map longitude/latitude pairs to deterministic spatial hash buckets."""
+        if region_coords.ndim != 2 or region_coords.size(-1) != 2:
+            raise ValueError(
+                'region_coords must have shape [batch, 2] as longitude/latitude'
+            )
+        longitude = region_coords[:, 0].float()
+        latitude = region_coords[:, 1].float()
+        valid = (
+            torch.isfinite(longitude)
+            & torch.isfinite(latitude)
+            & longitude.ge(-180.0)
+            & longitude.le(180.0)
+            & latitude.ge(-90.0)
+            & latitude.le(90.0)
+        )
+        latitude_index = torch.floor(
+            (latitude.clamp(-90.0, 90.0) + 90.0) / cell_degrees
+        ).long()
+        longitude_index = torch.floor(
+            (longitude.clamp(-180.0, 180.0) + 180.0) / cell_degrees
+        ).long()
+        hashed = torch.bitwise_xor(
+            latitude_index * 73856093,
+            longitude_index * 19349663,
+        )
+        bucket_ids = torch.remainder(hashed, num_buckets) + 1
+        return torch.where(valid, bucket_ids, torch.zeros_like(bucket_ids))
+
+    def _region_router_logits(self, region_coords):
+        if not self.use_hsid_lite:
+            raise RuntimeError('HSID-lite region router is disabled')
+        coarse_ids = self._hashed_grid_ids(
+            region_coords,
+            self.coarse_region_degrees,
+            self.coarse_region_buckets,
+        )
+        fine_ids = self._hashed_grid_ids(
+            region_coords,
+            self.fine_region_degrees,
+            self.fine_region_buckets,
+        )
+        region_features = torch.cat(
+            [
+                self.coarse_region_embedding(coarse_ids),
+                self.fine_region_embedding(fine_ids),
+            ],
+            dim=-1,
+        )
+        return self.region_router(self.region_router_norm(region_features))
 
     def reset_diagnostics(self):
         self._diag_samples = 0
@@ -592,6 +698,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             'router_bias_max': float(self._router_selection_bias.max().cpu().item()),
             'adaptive_shared_gate': self.adaptive_shared_gate,
             'adaptive_residual_gate': self.adaptive_residual_gate,
+            'use_hsid_lite': self.use_hsid_lite,
+            'region_embed_size': self.region_embed_size,
+            'coarse_region_degrees': self.coarse_region_degrees,
+            'fine_region_degrees': self.fine_region_degrees,
+            'coarse_region_buckets': self.coarse_region_buckets,
+            'fine_region_buckets': self.fine_region_buckets,
             'expert_evaluations_per_sample': self.top_k + int(self.use_shared_expert),
             'single_adapter_mode': self.single_adapter_mode,
             'adaptive_grouping': self.adaptive_grouping,
@@ -607,12 +719,20 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             self.reset_diagnostics()
         return result
 
-    def forward(self, final_state, local_state):
+    def forward(self, final_state, local_state, region_coords=None):
         if final_state.shape != local_state.shape:
             raise ValueError(
                 'final_state and local_state must have identical shapes, got '
                 f'{tuple(final_state.shape)} and {tuple(local_state.shape)}'
             )
+        if self.use_hsid_lite:
+            if region_coords is None:
+                raise ValueError('HSID-lite requires leak-free region_coords')
+            if region_coords.size(0) != final_state.size(0):
+                raise ValueError(
+                    'region_coords batch size must match routed states, got '
+                    f'{region_coords.size(0)} and {final_state.size(0)}'
+                )
 
         router_context = self._router_input(local_state, final_state)
         if self.single_adapter_mode:
@@ -620,7 +740,12 @@ class HypergraphConditionedSharedSparseMoE(nn.Module):
             gate_weights = final_state.new_ones((final_state.size(0), 1))
         else:
             normalized_context = self.router_norm(router_context)
-            gate_weights = F.softmax(self.router(normalized_context), dim=-1)
+            router_logits = self.router(normalized_context)
+            if self.use_hsid_lite:
+                router_logits = (
+                    router_logits + self._region_router_logits(region_coords)
+                )
+            gate_weights = F.softmax(router_logits, dim=-1)
         self._update_adaptive_grouping(gate_weights)
         _, topk_indices = self._select_topk(self._selection_scores(gate_weights))
         self._update_router_selection_bias(topk_indices)

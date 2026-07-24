@@ -222,6 +222,24 @@ class STHGCN(nn.Module):
                 residual_gate_max_delta=float(
                     getattr(cfg.model_args, 'moe_residual_gate_max_delta', 0.0)
                 ),
+                use_hsid_lite=bool(
+                    getattr(cfg.model_args, 'moe_use_hsid_lite', False)
+                ),
+                region_embed_size=int(
+                    getattr(cfg.model_args, 'moe_region_embed_size', 16)
+                ),
+                coarse_region_degrees=float(
+                    getattr(cfg.model_args, 'moe_coarse_region_degrees', 0.1)
+                ),
+                fine_region_degrees=float(
+                    getattr(cfg.model_args, 'moe_fine_region_degrees', 0.001)
+                ),
+                coarse_region_buckets=int(
+                    getattr(cfg.model_args, 'moe_coarse_region_buckets', 2048)
+                ),
+                fine_region_buckets=int(
+                    getattr(cfg.model_args, 'moe_fine_region_buckets', 16384)
+                ),
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None
@@ -334,7 +352,30 @@ class STHGCN(nn.Module):
 
         if self.use_moe:
             local_state = x_for_time_filter[:x.size(0)]
-            x, moe_aux_loss = self.moe(x, local_state)
+            region_coords = None
+            if self.moe.use_hsid_lite:
+                trajectory_context = data.get('x_target')
+                if trajectory_context is None:
+                    raise ValueError(
+                        'HSID-lite requires leak-free trajectory context'
+                    )
+                if (
+                    trajectory_context.ndim != 2
+                    or trajectory_context.size(1) < 3
+                    or trajectory_context.size(0) != x.size(0)
+                ):
+                    raise ValueError(
+                        'x_target must align with routed trajectories and '
+                        'contain mean longitude/latitude'
+                    )
+                # x_target is built from history check-ins after timestamp
+                # filtering: [size, mean_lon, mean_lat, mean_time, min, max].
+                region_coords = trajectory_context[:, 1:3]
+            x, moe_aux_loss = self.moe(
+                x,
+                local_state,
+                region_coords=region_coords,
+            )
             self.last_moe_aux_loss = moe_aux_loss.detach()
         else:
             moe_aux_loss = x.sum() * 0.0
