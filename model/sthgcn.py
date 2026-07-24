@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from torch import nn
 from layer import (
     CheckinEmbedding,
@@ -10,6 +11,7 @@ from layer import (
     DistanceEncoderSimple
 )
 from .sparse_moe import HypergraphConditionedSharedSparseMoE
+from .llm_semantic_expert import LLMSemanticLogitExpert
 
 
 class STHGCN(nn.Module):
@@ -26,6 +28,16 @@ class STHGCN(nn.Module):
         self.num_poi = cfg.dataset_args.num_poi
         self.embed_fusion_type = cfg.model_args.embed_fusion_type
         self.use_moe = bool(getattr(cfg.model_args, 'use_moe', False))
+        self.use_llm_semantic_expert = bool(
+            getattr(cfg.model_args, 'use_llm_semantic_expert', False)
+        )
+        self.llm_semantic_freeze_backbone = bool(
+            getattr(cfg.model_args, 'llm_semantic_freeze_backbone', False)
+        )
+        self.llm_semantic_distill_weight = float(
+            getattr(cfg.model_args, 'llm_semantic_distill_weight', 0.0)
+        )
+        self._llm_backbone_frozen = False
         self.moe_loss_weight = float(getattr(cfg.model_args, 'moe_loss_weight', 0.0))
         self.moe_post_group_loss_weight = float(
             getattr(
@@ -173,6 +185,49 @@ class STHGCN(nn.Module):
         # Keep the original prediction head initialization before optional R1
         # modules so R0 and R1 share all common-parameter initialization.
         self.linear = nn.Linear(self.checkin_embed_size, self.num_poi + 1)
+        if self.use_llm_semantic_expert:
+            profile_path = str(
+                getattr(cfg.model_args, 'llm_semantic_profile_path', '')
+            ).strip()
+            if not profile_path:
+                raise ValueError(
+                    'llm_semantic_profile_path is required when the LLM '
+                    'semantic expert is enabled.'
+                )
+            with np.load(profile_path, allow_pickle=False) as profile_data:
+                poi_profiles = profile_data['poi_profiles']
+                profile_available = profile_data['profile_available']
+            if poi_profiles.shape[0] != self.num_poi + 1:
+                raise ValueError(
+                    'LLM semantic profile rows must equal num_poi + 1: '
+                    f'{poi_profiles.shape[0]} != {self.num_poi + 1}.'
+                )
+            self.llm_semantic_expert = LLMSemanticLogitExpert(
+                hidden_size=self.checkin_embed_size,
+                poi_profiles=poi_profiles,
+                profile_available=profile_available,
+                rank=int(getattr(cfg.model_args, 'llm_semantic_rank', 32)),
+                dropout=float(
+                    getattr(cfg.model_args, 'llm_semantic_dropout', 0.1)
+                ),
+                max_scale=float(
+                    getattr(cfg.model_args, 'llm_semantic_max_scale', 0.5)
+                ),
+                mode=str(
+                    getattr(
+                        cfg.model_args,
+                        'llm_semantic_mode',
+                        'joint_projection',
+                    )
+                ),
+                distill_warmup_steps=int(
+                    getattr(
+                        cfg.model_args,
+                        'llm_semantic_distill_warmup_steps',
+                        0,
+                    )
+                ),
+            )
         if self.use_moe:
             self.moe = HypergraphConditionedSharedSparseMoE(
                 hidden_size=self.checkin_embed_size,
@@ -243,6 +298,48 @@ class STHGCN(nn.Module):
             )
         self.loss_func = nn.CrossEntropyLoss()
         self.last_moe_aux_loss = None
+
+    def load_backbone_state_dict(self, state_dict):
+        if not self.use_llm_semantic_expert:
+            raise RuntimeError(
+                'Backbone-only loading is reserved for the LLM semantic expert.'
+            )
+        incompatible = self.load_state_dict(state_dict, strict=False)
+        disallowed_missing = [
+            name for name in incompatible.missing_keys
+            if not name.startswith('llm_semantic_expert.')
+        ]
+        if disallowed_missing or incompatible.unexpected_keys:
+            raise RuntimeError(
+                'Backbone checkpoint is incompatible. '
+                f'Missing={disallowed_missing}, '
+                f'unexpected={incompatible.unexpected_keys}'
+            )
+        return incompatible
+
+    def freeze_backbone_for_llm_semantic(self):
+        if not self.use_llm_semantic_expert:
+            raise RuntimeError('Cannot freeze for a disabled semantic expert.')
+        for parameter in self.parameters():
+            parameter.requires_grad = False
+        for parameter in self.llm_semantic_expert.parameters():
+            parameter.requires_grad = True
+        self._llm_backbone_frozen = True
+        self.train(self.training)
+
+    def train(self, mode=True):
+        super().train(mode)
+        if mode and self._llm_backbone_frozen:
+            for name, module in self.named_children():
+                if name != 'llm_semantic_expert':
+                    module.eval()
+            self.llm_semantic_expert.train(True)
+        return self
+
+    def get_llm_semantic_diagnostics(self):
+        if not self.use_llm_semantic_expert:
+            return None
+        return self.llm_semantic_expert.diagnostics()
 
     def reset_moe_diagnostics(self):
         if self.use_moe:
@@ -382,7 +479,22 @@ class STHGCN(nn.Module):
             self.last_moe_aux_loss = None
 
         logits = self.linear(x)
+        llm_semantic_loss = logits.sum() * 0.0
+        if self.use_llm_semantic_expert:
+            semantic_delta, llm_semantic_loss = self.llm_semantic_expert(
+                x,
+                target_ids=label,
+            )
+            logits = logits + semantic_delta
         loss = self.loss_func(logits, label.long())
+        if (
+            self.use_llm_semantic_expert
+            and self.llm_semantic_distill_weight != 0.0
+        ):
+            loss = (
+                loss
+                + self.llm_semantic_distill_weight * llm_semantic_loss
+            )
         self.last_moe_loss_weight = self.current_moe_loss_weight()
         if self.use_moe and self.last_moe_loss_weight != 0.0:
             loss = loss + self.last_moe_loss_weight * moe_aux_loss

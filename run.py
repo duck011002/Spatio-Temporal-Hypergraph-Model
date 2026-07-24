@@ -21,10 +21,37 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--yaml_file', help='The configuration file.', required=True)
     parser.add_argument('--multi_run_mode', help='Run multiple experiments with the same config.', action='store_true')
+    parser.add_argument(
+        '--backbone-checkpoint',
+        default=None,
+        help=(
+            'A frozen backbone checkpoint file or directory. Unlike '
+            'init_checkpoint, optimizer and training-step state are not resumed.'
+        ),
+    )
+    parser.add_argument(
+        '--semantic-init-snapshot',
+        default=None,
+        help='Optional lightweight LLM semantic snapshot to continue training.',
+    )
+    parser.add_argument(
+        '--learning-rate-override',
+        type=float,
+        default=None,
+    )
+    parser.add_argument(
+        '--max-steps-override',
+        type=int,
+        default=None,
+    )
     args = parser.parse_args()
     conf_file = args.yaml_file
 
     cfg = Cfg(conf_file)
+    if args.learning_rate_override is not None:
+        cfg.run_args.learning_rate = args.learning_rate_override
+    if args.max_steps_override is not None:
+        cfg.run_args.max_steps = args.max_steps_override
 
     sizes = [int(i) for i in cfg.model_args.sizes.split('-')]
     cfg.model_args.sizes = sizes
@@ -193,6 +220,57 @@ if __name__ == '__main__':
         )
 
     model = model.to(device)
+    backbone_checkpoint = args.backbone_checkpoint or getattr(
+        cfg.run_args,
+        'backbone_checkpoint',
+        None,
+    )
+    if backbone_checkpoint and cfg.run_args.init_checkpoint:
+        raise ValueError(
+            'backbone_checkpoint and init_checkpoint are mutually exclusive.'
+        )
+    if (
+        cfg.run_args.do_train
+        and getattr(model, 'use_llm_semantic_expert', False)
+        and getattr(model, 'llm_semantic_freeze_backbone', False)
+        and not backbone_checkpoint
+        and not cfg.run_args.init_checkpoint
+    ):
+        raise ValueError(
+            'Frozen LLM semantic training requires --backbone-checkpoint '
+            '(or a full semantic init_checkpoint).'
+        )
+    if backbone_checkpoint:
+        checkpoint_path = str(backbone_checkpoint)
+        if osp.isdir(checkpoint_path):
+            checkpoint_path = osp.join(checkpoint_path, 'checkpoint.pt')
+        logging.info('[LLM Semantic] Loading frozen backbone: %s', checkpoint_path)
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        state_dict = checkpoint.get('model_state_dict', checkpoint)
+        model.load_backbone_state_dict(state_dict)
+    if args.semantic_init_snapshot:
+        if not getattr(model, 'use_llm_semantic_expert', False):
+            raise ValueError(
+                '--semantic-init-snapshot requires the semantic expert.'
+            )
+        semantic_snapshot = torch.load(
+            args.semantic_init_snapshot,
+            map_location=device,
+        )
+        model.llm_semantic_expert.load_state_dict(
+            semantic_snapshot['semantic_state_dict']
+        )
+        logging.info(
+            '[LLM Semantic] Loaded continuation snapshot at semantic step %s: %s',
+            semantic_snapshot.get('step'),
+            args.semantic_init_snapshot,
+        )
+    if (
+        getattr(model, 'use_llm_semantic_expert', False)
+        and getattr(model, 'llm_semantic_freeze_backbone', False)
+    ):
+        model.freeze_backbone_for_llm_semantic()
+        logging.info('[LLM Semantic] Backbone frozen; training semantic expert only.')
     logging.info(f'[Training] Seed: {seed}')
     logging.info('[Training] Model Parameter Configuration:')
     for name, param in model.named_parameters():
@@ -221,6 +299,20 @@ if __name__ == '__main__':
             model.moe.adaptive_residual_gate,
             model.moe.residual_gate_max_delta,
         )
+    if getattr(model, 'use_llm_semantic_expert', False):
+        semantic_expert = model.llm_semantic_expert
+        logging.info(
+            '[LLM Semantic] Enabled: mode=%s profile_dim=%s rank=%s '
+            'max_scale=%s distill_weight=%s warmup_steps=%s '
+            'profile_coverage=%.6f',
+            semantic_expert.mode,
+            semantic_expert.profile_dim,
+            semantic_expert.rank,
+            semantic_expert.max_scale,
+            model.llm_semantic_distill_weight,
+            semantic_expert.distill_warmup_steps,
+            float(semantic_expert.profile_available.float().mean().item()),
+        )
 
     if cfg.run_args.do_train:
         current_learning_rate = cfg.run_args.learning_rate
@@ -238,7 +330,10 @@ if __name__ == '__main__':
             # Restore model from checkpoint directory
             # manually set in yml
             logging.info(f'[Training] Loading checkpoint %s...' % cfg.run_args.init_checkpoint)
-            checkpoint = torch.load(osp.join(cfg.run_args.init_checkpoint, 'checkpoint.pt'))
+            checkpoint = torch.load(
+                osp.join(cfg.run_args.init_checkpoint, 'checkpoint.pt'),
+                map_location=device,
+            )
             init_step = checkpoint['step']
             model.load_state_dict(checkpoint['model_state_dict'])
             current_learning_rate = checkpoint['current_learning_rate']
@@ -247,7 +342,10 @@ if __name__ == '__main__':
             sizes = checkpoint['sizes']
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         else:
-            logging.info(f'[Training] Randomly Initializing Model...')
+            if backbone_checkpoint:
+                logging.info('[Training] Initializing semantic expert on frozen backbone.')
+            else:
+                logging.info(f'[Training] Randomly Initializing Model...')
             init_step = 0
         step = init_step
 
@@ -299,6 +397,37 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                semantic_snapshot_steps = int(
+                    getattr(
+                        cfg.run_args,
+                        'llm_semantic_snapshot_steps',
+                        0,
+                    )
+                    or 0
+                )
+                if (
+                    semantic_snapshot_steps > 0
+                    and getattr(model, 'use_llm_semantic_expert', False)
+                    and global_step % semantic_snapshot_steps == 0
+                ):
+                    semantic_snapshot_path = osp.join(
+                        cfg.run_args.save_path,
+                        f'llm_semantic_step_{global_step}.pt',
+                    )
+                    torch.save(
+                        {
+                            'step': global_step,
+                            'semantic_state_dict': (
+                                model.llm_semantic_expert.state_dict()
+                            ),
+                            'backbone_checkpoint': backbone_checkpoint,
+                        },
+                        semantic_snapshot_path,
+                    )
+                    logging.info(
+                        '[LLM Semantic] Saved lightweight snapshot: %s',
+                        semantic_snapshot_path,
+                    )
                 summary_writer.add_scalar(f'train/loss_step', loss_value, global_step)
                 if getattr(model, 'last_moe_aux_loss', None) is not None:
                     summary_writer.add_scalar(
@@ -311,7 +440,18 @@ if __name__ == '__main__':
                         float(model.last_moe_loss_weight),
                         global_step
                     )
-
+                semantic_diagnostics = getattr(
+                    model,
+                    'get_llm_semantic_diagnostics',
+                    lambda: None,
+                )()
+                if semantic_diagnostics is not None:
+                    for diagnostic_name, diagnostic_value in semantic_diagnostics.items():
+                        summary_writer.add_scalar(
+                            f'train/llm_semantic_{diagnostic_name}_step',
+                            float(diagnostic_value.cpu().item()),
+                            global_step,
+                        )
                 if cfg.run_args.do_validate and global_step % cfg.run_args.valid_steps == 0:
                     logging.info(f'[Evaluating] Evaluating on Valid Dataset...')
 
@@ -418,7 +558,10 @@ if __name__ == '__main__':
     if cfg.run_args.do_test:
         logging.info('[Evaluating] Start evaluating on test set...')
 
-        checkpoint = torch.load(osp.join(cfg.run_args.save_path, 'checkpoint.pt'))
+        checkpoint = torch.load(
+            osp.join(cfg.run_args.save_path, 'checkpoint.pt'),
+            map_location=device,
+        )
         model.load_state_dict(checkpoint['model_state_dict'])
         test_started_at = time.perf_counter()
         run_reporter.stage_started('test')
