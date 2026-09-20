@@ -1,0 +1,4 @@
+dataset,distill_train_samples,calibration_samples,audit_samples,teacher_model_fraction_train,student_teacher_mimic_accuracy_train,threshold,calibration_switches,calibration_delta_correct_vs_rule,audit_switches,audit_delta_correct_vs_rule,audit_decisive_accuracy,enabled_for_test
+nyc,233,81,93,0.2145922746781116,0.7424892703862661,0.22767044106957907,46,7,59,-6,0.36666666666666664,False
+ca,230,83,62,0.16956521739130434,0.7782608695652173,0.5086829779104509,25,2,20,2,0.6428571428571429,True
+tky,522,197,158,0.1685823754789272,0.7969348659003831,0.5913384557935236,42,5,43,-4,0.40816326530612246,False

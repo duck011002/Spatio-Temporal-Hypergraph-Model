@@ -1,0 +1,123 @@
+{
+  "protocol": {
+    "teacher_version": "history_teacher_v2",
+    "model": "qwen-flash",
+    "source_split": "validation",
+    "gate": "teacher_changes_top1",
+    "meta_split": {
+      "distill_train": "hash buckets 0-5",
+      "calibration": "hash buckets 6-7",
+      "audit": "hash buckets 8-9"
+    },
+    "labels_in_prompt": false,
+    "raw_user_or_poi_ids_in_prompt": false,
+    "thinking_enabled": false,
+    "temperature": 0,
+    "max_tokens": 35,
+    "recent_history_length": 8
+  },
+  "request_summary": {
+    "new_requests": 148,
+    "cached_requests": 2,
+    "new_cost_cny": 0.012463200000000006
+  },
+  "datasets": [
+    {
+      "dataset": "nyc",
+      "backbone": "A4",
+      "total_validation_samples": 1400,
+      "gated_samples_before_limit": 407,
+      "prepared_samples": 50,
+      "meta_split_counts": {
+        "distill_train": 30,
+        "calibration": 7,
+        "audit": 13
+      },
+      "rule_strength": 0.5,
+      "rule_weights": {
+        "spatial": 0.3098617525092863,
+        "temporal": 0.29802001290645797,
+        "category_transition": 0.020829971234617467,
+        "user_preference": 0.3597163214589122,
+        "popularity": 0.011571941890725981
+      },
+      "teacher_evaluated_samples": 50,
+      "corrected_cases": 5,
+      "broken_cases": 11,
+      "teacher_preserved_corrections": 4,
+      "teacher_rescued_breakages": 1,
+      "teacher_decisive_accuracy": 0.3125,
+      "teacher_model_choice_fraction": 0.16,
+      "teacher_confidence_mean": 0.7080000000000001,
+      "teacher_delta_correct_vs_rule": 0,
+      "prompt_tokens": 22192,
+      "completion_tokens": 600,
+      "cost_cny": 0.0042288
+    },
+    {
+      "dataset": "ca",
+      "backbone": "R0",
+      "total_validation_samples": 3529,
+      "gated_samples_before_limit": 375,
+      "prepared_samples": 50,
+      "meta_split_counts": {
+        "distill_train": 32,
+        "calibration": 9,
+        "audit": 9
+      },
+      "rule_strength": 0.25,
+      "rule_weights": {
+        "spatial": 0.26774796973030857,
+        "temporal": 0.34117512657442334,
+        "category_transition": 0.018000778587927497,
+        "user_preference": 0.37015325599626697,
+        "popularity": 0.0029228691110735907
+      },
+      "teacher_evaluated_samples": 50,
+      "corrected_cases": 9,
+      "broken_cases": 6,
+      "teacher_preserved_corrections": 7,
+      "teacher_rescued_breakages": 2,
+      "teacher_decisive_accuracy": 0.6,
+      "teacher_model_choice_fraction": 0.22,
+      "teacher_confidence_mean": 0.7240000000000001,
+      "teacher_delta_correct_vs_rule": 0,
+      "prompt_tokens": 21954,
+      "completion_tokens": 600,
+      "cost_cny": 0.0041931
+    },
+    {
+      "dataset": "tky",
+      "backbone": "R0",
+      "total_validation_samples": 6868,
+      "gated_samples_before_limit": 877,
+      "prepared_samples": 50,
+      "meta_split_counts": {
+        "distill_train": 25,
+        "calibration": 18,
+        "audit": 7
+      },
+      "rule_strength": 0.2,
+      "rule_weights": {
+        "spatial": 0.0,
+        "temporal": 0.0,
+        "category_transition": 0.0,
+        "user_preference": 1.0,
+        "popularity": 0.0
+      },
+      "teacher_evaluated_samples": 50,
+      "corrected_cases": 4,
+      "broken_cases": 6,
+      "teacher_preserved_corrections": 2,
+      "teacher_rescued_breakages": 1,
+      "teacher_decisive_accuracy": 0.3,
+      "teacher_model_choice_fraction": 0.2,
+      "teacher_confidence_mean": 0.7430000000000001,
+      "teacher_delta_correct_vs_rule": -1,
+      "prompt_tokens": 22059,
+      "completion_tokens": 600,
+      "cost_cny": 0.00420885
+    }
+  ],
+  "detail_csv": "server_artifacts\\llm_distillation\\history_teacher_v2_decisions.csv"
+}

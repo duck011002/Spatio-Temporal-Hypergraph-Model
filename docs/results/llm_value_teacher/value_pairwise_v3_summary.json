@@ -1,0 +1,75 @@
+{
+  "protocol": {
+    "teacher_version": "value_pairwise_v3",
+    "source_split": "validation",
+    "test_sent_to_llm": false,
+    "hidden_from_prompt": [
+      "model_score",
+      "rule_score",
+      "rule_weights"
+    ],
+    "selection": "rule_changes_top1 AND low_final_margin AND high_model_margin",
+    "temperature": 0,
+    "max_output_tokens": 120,
+    "hard_budget_cny": 0.015
+  },
+  "request_summary": {
+    "new_requests": 12,
+    "cached_requests": 0,
+    "estimated_input_tokens": 6195,
+    "estimated_output_token_cap": 1440,
+    "estimated_cost_cny": 0.00308925,
+    "reserved_cost_cny": 0.009600000000000001,
+    "hard_budget_cny": 0.015,
+    "new_cost_cny": 0.0019325999999999998
+  },
+  "datasets": [
+    {
+      "dataset": "nyc",
+      "backbone": "A4",
+      "source_split": "validation",
+      "total_samples": 1400,
+      "gated_samples_before_limit": 407,
+      "prepared_samples": 407,
+      "meta_split_counts": {
+        "distill_train": 233,
+        "calibration": 81,
+        "audit": 93
+      },
+      "base_top1_correct_total": 366,
+      "rule_top1_correct_total": 379,
+      "rule_strength": 0.5,
+      "rule_weights": {
+        "spatial": 0.3098617525092863,
+        "temporal": 0.29802001290645797,
+        "category_transition": 0.020829971234617467,
+        "user_preference": 0.3597163214589122,
+        "popularity": 0.011571941890725981
+      },
+      "rule_override_candidates": 407,
+      "eligible_low_confidence_conflicts": 80,
+      "final_margin_threshold": 0.04671709110996862,
+      "model_margin_threshold": 0.08317377494998224,
+      "selected_samples": 12,
+      "selected_meta_split_counts": {
+        "distill_train": 8,
+        "calibration": 2,
+        "audit": 2
+      },
+      "teacher_evaluated_samples": 12,
+      "model_correct": 0,
+      "rule_correct": 3,
+      "teacher_correct": 2,
+      "teacher_delta_vs_rule": -1,
+      "pairwise_oracle_correct": 3,
+      "pairwise_oracle_delta_vs_rule": 0,
+      "teacher_decisive_accuracy": 0.6666666666666666,
+      "teacher_abstain_fraction": 0.0,
+      "teacher_confidence_mean": 0.7958333333333331,
+      "prompt_tokens": 6564,
+      "completion_tokens": 632,
+      "cost_cny": 0.0019325999999999998
+    }
+  ],
+  "detail_csv": "server_artifacts\\llm_value_teacher\\value_pairwise_v3_decisions.csv"
+}

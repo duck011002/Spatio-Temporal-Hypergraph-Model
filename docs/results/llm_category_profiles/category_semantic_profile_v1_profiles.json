@@ -1,0 +1,856 @@
+{
+  "protocol": {
+    "profile_version": "category_semantic_profile_v1",
+    "model": "qwen-flash",
+    "labels_in_prompt": false,
+    "user_or_poi_ids_in_prompt": false,
+    "test_examples_in_prompt": false,
+    "temperature": 0,
+    "max_output_tokens": 320
+  },
+  "request_summary": {
+    "profile_version": "category_semantic_profile_v1",
+    "datasets": [
+      {
+        "dataset": "nyc",
+        "backbone": "A4",
+        "all_candidate_categories": 298,
+        "selected_categories": 20,
+        "candidate_occurrences_covered": 14512,
+        "candidate_occurrences_total": 28000
+      }
+    ],
+    "total_selected_categories": 20,
+    "new_requests": 17,
+    "cached_requests": 3,
+    "estimated_input_tokens": 5177,
+    "estimated_output_token_cap": 5440,
+    "estimated_cost_cny": 0.00893655,
+    "reserved_cost_cny": 0.025500000000000002,
+    "hard_budget_cny": 0.05,
+    "dry_run": false,
+    "new_cost_cny": 0.006848399999999999
+  },
+  "profiles": [
+    {
+      "dataset": "nyc",
+      "category_id": 263,
+      "category_name": "Subway",
+      "candidate_frequency": 1617,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 1.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.8,
+          "midday": 0.6,
+          "afternoon": 0.7,
+          "evening": 0.5,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.4,
+          "transit_connector": 1.0,
+          "purposeful_destination": 0.5,
+          "spontaneous_stop": 0.2
+        },
+        "repeat_likelihood": 0.9,
+        "routine_likelihood": 0.8,
+        "distance_tolerance": 0.7,
+        "confidence": 0.95,
+        "summary": "Subway serves as a primary transit connector in urban areas, frequently used for commuting and routine travel."
+      },
+      "cost_cny": 0.0003804,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\a277e5c97dfa401dae6ff677.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 69,
+      "category_name": "Train Station",
+      "candidate_frequency": 1163,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 1.0,
+          "food_drink": 0.1,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.6,
+          "midday": 0.5,
+          "afternoon": 0.4,
+          "evening": 0.2,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.2,
+          "transit_connector": 1.0,
+          "purposeful_destination": 0.8,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.7,
+        "routine_likelihood": 0.8,
+        "distance_tolerance": 0.6,
+        "confidence": 0.95,
+        "summary": "Primary transit hub for commutes and travel; high routine and repeat visitation."
+      },
+      "cost_cny": 0.0003744,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\a18ad83eada699f2fbf4025f.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 6,
+      "category_name": "Home (private)",
+      "candidate_frequency": 1073,
+      "profile": {
+        "intents": {
+          "home_lodging": 1.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.2,
+          "midday": 0.1,
+          "afternoon": 0.1,
+          "evening": 0.2,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 1.0,
+          "transit_connector": 0.0,
+          "purposeful_destination": 0.0,
+          "spontaneous_stop": 0.0
+        },
+        "repeat_likelihood": 0.9,
+        "routine_likelihood": 0.9,
+        "distance_tolerance": 0.1,
+        "confidence": 0.95,
+        "summary": "Primary residence; high repeat and routine use; minimal travel tolerance"
+      },
+      "cost_cny": 0.00036855,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\b92397888113a1df2f169d1a.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 221,
+      "category_name": "Coffee Shop",
+      "candidate_frequency": 1045,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 1.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.6,
+          "morning": 0.8,
+          "midday": 0.5,
+          "afternoon": 0.4,
+          "evening": 0.2,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.7,
+          "transit_connector": 0.3,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.6
+        },
+        "repeat_likelihood": 0.8,
+        "routine_likelihood": 0.7,
+        "distance_tolerance": 0.5,
+        "confidence": 0.9,
+        "summary": "Coffee shops are frequented for beverages and light snacks, often part of daily routines, especially in morning hours."
+      },
+      "cost_cny": 0.00038189999999999996,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\94484e9515e470be4d93c8b6.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 36,
+      "category_name": "Bar",
+      "candidate_frequency": 1031,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.1,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.2,
+          "nightlife": 0.8,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.0,
+          "morning": 0.0,
+          "midday": 0.1,
+          "afternoon": 0.2,
+          "evening": 0.6,
+          "late_night": 0.7
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.1,
+          "transit_connector": 0.1,
+          "purposeful_destination": 0.4,
+          "spontaneous_stop": 0.5
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.3,
+        "distance_tolerance": 0.5,
+        "confidence": 0.95,
+        "summary": "Bars are primarily nightlife destinations with evening and late-night visit peaks, often visited repeatedly and spontaneously."
+      },
+      "cost_cny": 0.00037875,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\9199997ca35c5cc32386d1bf.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 41,
+      "category_name": "Food & Drink Shop",
+      "candidate_frequency": 969,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.1,
+          "work_education": 0.05,
+          "transport": 0.0,
+          "food_drink": 0.9,
+          "shopping_errands": 0.2,
+          "health_care": 0.0,
+          "leisure_culture": 0.3,
+          "nightlife": 0.4,
+          "outdoor_sports": 0.1,
+          "personal_services": 0.1
+        },
+        "time_affinity": {
+          "early_morning": 0.1,
+          "morning": 0.3,
+          "midday": 0.6,
+          "afternoon": 0.5,
+          "evening": 0.8,
+          "late_night": 0.4
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.3,
+          "transit_connector": 0.2,
+          "purposeful_destination": 0.7,
+          "spontaneous_stop": 0.6
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.5,
+        "distance_tolerance": 0.4,
+        "confidence": 0.95,
+        "summary": "Frequent visits for meals, snacks, and drinks across multiple times of day; often part of daily routines or spontaneous stops."
+      },
+      "cost_cny": 0.0003897,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\2152c3a28c1db5f45c7f6c7a.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 120,
+      "category_name": "Park",
+      "candidate_frequency": 968,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.8,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.7,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.1,
+          "morning": 0.4,
+          "midday": 0.6,
+          "afternoon": 0.7,
+          "evening": 0.3,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.5,
+          "transit_connector": 0.1,
+          "purposeful_destination": 0.8,
+          "spontaneous_stop": 0.6
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.7,
+        "distance_tolerance": 0.5,
+        "confidence": 0.9,
+        "summary": "Parks serve as leisure, outdoor recreation, and routine destinations with moderate travel tolerance."
+      },
+      "cost_cny": 0.00037425,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\9ac048c763c8105545f128c8.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 119,
+      "category_name": "Other Great Outdoors",
+      "candidate_frequency": 808,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.1,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.9,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.1,
+          "morning": 0.3,
+          "midday": 0.5,
+          "afternoon": 0.6,
+          "evening": 0.2,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.2,
+          "transit_connector": 0.1,
+          "purposeful_destination": 0.8,
+          "spontaneous_stop": 0.4
+        },
+        "repeat_likelihood": 0.7,
+        "routine_likelihood": 0.5,
+        "distance_tolerance": 0.8,
+        "confidence": 0.95,
+        "summary": "Natural outdoor spaces for recreation, sports, and relaxation; often visited repeatedly and intentionally, with high tolerance for travel distance."
+      },
+      "cost_cny": 0.00038669999999999997,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\9af408f4ede2c5ca87e8408c.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 300,
+      "category_name": "Neighborhood",
+      "candidate_frequency": 761,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.9,
+          "work_education": 0.1,
+          "transport": 0.2,
+          "food_drink": 0.3,
+          "shopping_errands": 0.4,
+          "health_care": 0.2,
+          "leisure_culture": 0.3,
+          "nightlife": 0.1,
+          "outdoor_sports": 0.2,
+          "personal_services": 0.3
+        },
+        "time_affinity": {
+          "early_morning": 0.1,
+          "morning": 0.3,
+          "midday": 0.5,
+          "afternoon": 0.6,
+          "evening": 0.7,
+          "late_night": 0.2
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.8,
+          "transit_connector": 0.4,
+          "purposeful_destination": 0.5,
+          "spontaneous_stop": 0.3
+        },
+        "repeat_likelihood": 0.7,
+        "routine_likelihood": 0.8,
+        "distance_tolerance": 0.6,
+        "confidence": 0.9,
+        "summary": "A residential area serving daily life, housing, and local services with strong routine ties and moderate travel willingness."
+      },
+      "cost_cny": 0.0003804,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\2a3e033a44be84d358562a51.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 253,
+      "category_name": "Department Store",
+      "candidate_frequency": 668,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.1,
+          "work_education": 0.05,
+          "transport": 0.0,
+          "food_drink": 0.1,
+          "shopping_errands": 0.8,
+          "health_care": 0.0,
+          "leisure_culture": 0.2,
+          "nightlife": 0.05,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.3
+        },
+        "time_affinity": {
+          "early_morning": 0.05,
+          "morning": 0.4,
+          "midday": 0.6,
+          "afternoon": 0.7,
+          "evening": 0.3,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.3,
+          "transit_connector": 0.2,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.5,
+        "distance_tolerance": 0.4,
+        "confidence": 0.9,
+        "summary": "Large retail stores for diverse goods, often visited during daytime for shopping and errands."
+      },
+      "cost_cny": 0.0005139,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\d43299a532f080b4ee6083bd.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 256,
+      "category_name": "Road",
+      "candidate_frequency": 554,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 1.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.2,
+          "morning": 0.4,
+          "midday": 0.6,
+          "afternoon": 0.5,
+          "evening": 0.3,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.1,
+          "transit_connector": 0.9,
+          "purposeful_destination": 0.8,
+          "spontaneous_stop": 0.2
+        },
+        "repeat_likelihood": 0.4,
+        "routine_likelihood": 0.5,
+        "distance_tolerance": 0.7,
+        "confidence": 0.95,
+        "summary": "Primary infrastructure for movement; supports transit and travel across locations"
+      },
+      "cost_cny": 0.00036675,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\fac8547e3bac6aa32e305e34.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 60,
+      "category_name": "Office",
+      "candidate_frequency": 548,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 1.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.2,
+          "morning": 0.8,
+          "midday": 0.9,
+          "afternoon": 0.9,
+          "evening": 0.3,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.9,
+          "transit_connector": 0.3,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.9,
+        "routine_likelihood": 0.9,
+        "distance_tolerance": 0.4,
+        "confidence": 0.95,
+        "summary": "Primary workplace for professional activities, typically visited daily during business hours."
+      },
+      "cost_cny": 0.00036975,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\02091336b2faf6313b2ebe87.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 121,
+      "category_name": "Plaza",
+      "candidate_frequency": 478,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.1,
+          "work_education": 0.05,
+          "transport": 0.2,
+          "food_drink": 0.3,
+          "shopping_errands": 0.25,
+          "health_care": 0.05,
+          "leisure_culture": 0.4,
+          "nightlife": 0.15,
+          "outdoor_sports": 0.1,
+          "personal_services": 0.1
+        },
+        "time_affinity": {
+          "early_morning": 0.05,
+          "morning": 0.15,
+          "midday": 0.3,
+          "afternoon": 0.35,
+          "evening": 0.3,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.2,
+          "transit_connector": 0.4,
+          "purposeful_destination": 0.5,
+          "spontaneous_stop": 0.6
+        },
+        "repeat_likelihood": 0.4,
+        "routine_likelihood": 0.3,
+        "distance_tolerance": 0.5,
+        "confidence": 0.85,
+        "summary": "Public urban space for social, cultural, and commercial activities with moderate repeat visits."
+      },
+      "cost_cny": 0.0005199,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\77c6c9959a982b662e8c0811.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 213,
+      "category_name": "Bar",
+      "candidate_frequency": 459,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.1,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.2,
+          "nightlife": 0.8,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.0,
+          "morning": 0.0,
+          "midday": 0.1,
+          "afternoon": 0.2,
+          "evening": 0.6,
+          "late_night": 0.7
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.1,
+          "transit_connector": 0.0,
+          "purposeful_destination": 0.5,
+          "spontaneous_stop": 0.4
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.3,
+        "distance_tolerance": 0.5,
+        "confidence": 0.95,
+        "summary": "Bars are primarily social venues for evening and late-night gatherings, often visited for leisure and nightlife."
+      },
+      "cost_cny": 0.00051375,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\10f5670ac0ed1f4ae2d36953.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 137,
+      "category_name": "Gym / Fitness Center",
+      "candidate_frequency": 455,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.1,
+          "work_education": 0.2,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.3,
+          "leisure_culture": 0.4,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.5,
+          "personal_services": 0.1
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.5,
+          "midday": 0.4,
+          "afternoon": 0.6,
+          "evening": 0.4,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.7,
+          "transit_connector": 0.2,
+          "purposeful_destination": 0.8,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.8,
+        "routine_likelihood": 0.7,
+        "distance_tolerance": 0.5,
+        "confidence": 0.9,
+        "summary": "Frequent, routine visits for fitness and outdoor exercise; strong morning to afternoon affinity; often part of structured activity chains."
+      },
+      "cost_cny": 0.0003852,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\f764a8db5d29fa0620e33186.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 146,
+      "category_name": "Movie Theater",
+      "candidate_frequency": 432,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 1.0,
+          "nightlife": 0.3,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.0,
+          "morning": 0.1,
+          "midday": 0.2,
+          "afternoon": 0.4,
+          "evening": 0.8,
+          "late_night": 0.5
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.1,
+          "transit_connector": 0.0,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.2
+        },
+        "repeat_likelihood": 0.6,
+        "routine_likelihood": 0.3,
+        "distance_tolerance": 0.7,
+        "confidence": 0.95,
+        "summary": "Movie theaters are primarily leisure destinations with strong evening affinity and moderate repeat visits."
+      },
+      "cost_cny": 0.00037289999999999996,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\2e4c00385ba0527287aa7785.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 95,
+      "category_name": "Deli / Bodega",
+      "candidate_frequency": 391,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.8,
+          "shopping_errands": 0.7,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.1
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.6,
+          "midday": 0.5,
+          "afternoon": 0.4,
+          "evening": 0.2,
+          "late_night": 0.0
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.5,
+          "transit_connector": 0.2,
+          "purposeful_destination": 0.7,
+          "spontaneous_stop": 0.6
+        },
+        "repeat_likelihood": 0.7,
+        "routine_likelihood": 0.6,
+        "distance_tolerance": 0.4,
+        "confidence": 0.9,
+        "summary": "A convenience store for quick food, snacks, and daily essentials, often visited regularly during mornings and midday."
+      },
+      "cost_cny": 0.00038219999999999997,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\fa8e30bcee8e622de4720ab3.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 220,
+      "category_name": "Bridge",
+      "candidate_frequency": 390,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 1.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.2,
+          "morning": 0.3,
+          "midday": 0.4,
+          "afternoon": 0.5,
+          "evening": 0.3,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.1,
+          "transit_connector": 0.9,
+          "purposeful_destination": 0.2,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.3,
+        "routine_likelihood": 0.4,
+        "distance_tolerance": 0.6,
+        "confidence": 0.9,
+        "summary": "A bridge primarily serves as a transit connector facilitating movement across obstacles."
+      },
+      "cost_cny": 0.00036825,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\a09148e403a4ac2e31153188.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 101,
+      "category_name": "American Restaurant",
+      "candidate_frequency": 357,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 1.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 0.0
+        },
+        "time_affinity": {
+          "early_morning": 0.0,
+          "morning": 0.2,
+          "midday": 0.6,
+          "afternoon": 0.4,
+          "evening": 0.8,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.3,
+          "transit_connector": 0.1,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.5
+        },
+        "repeat_likelihood": 0.7,
+        "routine_likelihood": 0.6,
+        "distance_tolerance": 0.5,
+        "confidence": 0.9,
+        "summary": "American restaurants are frequented for meals, often during midday and evening, with moderate repeat visits and routine behavior."
+      },
+      "cost_cny": 0.0003834,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\976587ac555767934d33f936.json"
+    },
+    {
+      "dataset": "nyc",
+      "category_id": 136,
+      "category_name": "Gym / Fitness Center",
+      "candidate_frequency": 345,
+      "profile": {
+        "intents": {
+          "home_lodging": 0.0,
+          "work_education": 0.0,
+          "transport": 0.0,
+          "food_drink": 0.0,
+          "shopping_errands": 0.0,
+          "health_care": 0.0,
+          "leisure_culture": 0.0,
+          "nightlife": 0.0,
+          "outdoor_sports": 0.0,
+          "personal_services": 1.0
+        },
+        "time_affinity": {
+          "early_morning": 0.3,
+          "morning": 0.5,
+          "midday": 0.4,
+          "afternoon": 0.6,
+          "evening": 0.7,
+          "late_night": 0.1
+        },
+        "mobility_roles": {
+          "routine_anchor": 0.8,
+          "transit_connector": 0.2,
+          "purposeful_destination": 0.9,
+          "spontaneous_stop": 0.1
+        },
+        "repeat_likelihood": 0.9,
+        "routine_likelihood": 0.8,
+        "distance_tolerance": 0.6,
+        "confidence": 0.95,
+        "summary": "Frequent, time-specific visits for fitness routines; often part of daily habits; moderate travel willingness."
+      },
+      "cost_cny": 0.0003807,
+      "cache_file": "server_artifacts\\llm_category_profiles\\profile_cache\\nyc\\category_semantic_profile_v1\\qwen-flash\\bef6b10d057d33e50bde143b.json"
+    }
+  ]
+}

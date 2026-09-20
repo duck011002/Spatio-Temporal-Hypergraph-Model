@@ -1,0 +1,83 @@
+{
+  "protocol": {
+    "teacher_version": "value_pairwise_v4_raw_context",
+    "source_split": "validation",
+    "test_sent_to_llm": false,
+    "hidden_from_prompt": [
+      "model_score",
+      "rule_score",
+      "rule_weights",
+      "spatial",
+      "temporal",
+      "category_transition",
+      "user_preference",
+      "popularity",
+      "recent_category_rate",
+      "recent_poi_rate",
+      "matches_previous_category"
+    ],
+    "selection": "rule_changes_top1 AND low_final_margin AND high_model_margin",
+    "temperature": 0,
+    "max_output_tokens": 120,
+    "hard_budget_cny": 0.03
+  },
+  "request_summary": {
+    "new_requests": 24,
+    "cached_requests": 0,
+    "estimated_input_tokens": 10224,
+    "estimated_output_token_cap": 2880,
+    "estimated_cost_cny": 0.0058536000000000005,
+    "reserved_cost_cny": 0.019200000000000002,
+    "hard_budget_cny": 0.03,
+    "new_cost_cny": 0.0031072499999999998
+  },
+  "datasets": [
+    {
+      "dataset": "nyc",
+      "backbone": "A4",
+      "source_split": "validation",
+      "total_samples": 1400,
+      "gated_samples_before_limit": 407,
+      "prepared_samples": 407,
+      "meta_split_counts": {
+        "distill_train": 233,
+        "calibration": 81,
+        "audit": 93
+      },
+      "base_top1_correct_total": 366,
+      "rule_top1_correct_total": 379,
+      "rule_strength": 0.5,
+      "rule_weights": {
+        "spatial": 0.3098617525092863,
+        "temporal": 0.29802001290645797,
+        "category_transition": 0.020829971234617467,
+        "user_preference": 0.3597163214589122,
+        "popularity": 0.011571941890725981
+      },
+      "rule_override_candidates": 407,
+      "eligible_low_confidence_conflicts": 80,
+      "final_margin_threshold": 0.04671709110996862,
+      "model_margin_threshold": 0.08317377494998224,
+      "selected_samples": 24,
+      "selected_meta_split_counts": {
+        "distill_train": 15,
+        "calibration": 5,
+        "audit": 4
+      },
+      "teacher_evaluated_samples": 24,
+      "model_correct": 2,
+      "rule_correct": 5,
+      "teacher_correct": 1,
+      "teacher_delta_vs_rule": -4,
+      "pairwise_oracle_correct": 7,
+      "pairwise_oracle_delta_vs_rule": 2,
+      "teacher_decisive_accuracy": 0.14285714285714285,
+      "teacher_abstain_fraction": 0.041666666666666664,
+      "teacher_confidence_mean": 0.6958333333333332,
+      "prompt_tokens": 9975,
+      "completion_tokens": 1074,
+      "cost_cny": 0.00310725
+    }
+  ],
+  "detail_csv": "server_artifacts\\llm_value_teacher\\value_pairwise_v4_raw_context_decisions.csv"
+}

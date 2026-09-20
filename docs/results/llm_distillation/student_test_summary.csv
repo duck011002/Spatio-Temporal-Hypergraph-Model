@@ -1,0 +1,4 @@
+dataset,backbone,total_test_samples,gated_test_samples,student_enabled,threshold,switches_to_model,rule_recall_at_1,student_recall_at_1,delta_correct_vs_rule,delta_recall_at_1_vs_rule,rescued_rule_breakages,preserved_rule_corrections,decisive_accuracy
+nyc,A4,1347,407,False,0.22767044106957907,0,0.27542687453600595,0.27542687453600595,0,0.0,0,78,0.5693430656934306
+ca,R0,2780,304,True,0.5086829779104509,106,0.16942446043165468,0.16870503597122302,-2,-0.0007194244604316547,6,26,0.48484848484848486
+tky,R0,7038,837,False,0.5913384557935236,0,0.26115373685706167,0.26115373685706167,0,0.0,0,125,0.5341880341880342
