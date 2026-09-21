@@ -25,6 +25,7 @@ def save_model(model, optimizer, save_variable_list, run_args, argparse_dict):
 
     torch.save({
         **save_variable_list,
+        'experiment_metadata': dict(argparse_dict),
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict()},
         osp.join(run_args.save_path, 'checkpoint.pt')
@@ -35,7 +36,12 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=True):
+def test_step(model, data, ks=(1, 5, 10, 20), desc='Evaluate', show_progress=True, max_batches=None):
+    if max_batches is not None:
+        from itertools import islice
+        if int(max_batches) <= 0:
+            raise ValueError('max_batches must be positive')
+        data = islice(data, int(max_batches))
     model.eval()
     if hasattr(model, 'reset_moe_diagnostics'):
         model.reset_moe_diagnostics()

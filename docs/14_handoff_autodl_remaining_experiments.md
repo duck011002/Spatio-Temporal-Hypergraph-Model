@@ -1,5 +1,7 @@
 # STHGCN：AutoDL 剩余两个数据集实验交接
 
+> 当前 A5-Jev 路线的执行入口已转至 [docs/26](26_a5_jev_server_runbook.md)。本文保留历史语义画像蒸馏交接，不与 A5-Jev 混跑。
+
 > 交接基线：feature/hc-shared-moe，当前代码提交 9f22947（2026-09-20 复核）。
 >
 > 本文按当前仓库证据编写，不把论文草稿、validation 数字或未归档的服务器目录当作完成证明。

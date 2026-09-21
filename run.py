@@ -48,6 +48,9 @@ if __name__ == '__main__':
     conf_file = args.yaml_file
 
     cfg = Cfg(conf_file)
+    eval_max_batches = getattr(cfg.run_args, 'eval_max_batches', None)
+    if eval_max_batches is not None and not getattr(cfg.run_args, 'smoke_only', False):
+        raise ValueError('Partial evaluation requires smoke_only: true; cannot be used for formal training.')
     if args.learning_rate_override is not None:
         cfg.run_args.learning_rate = args.learning_rate_override
     if args.max_steps_override is not None:
@@ -353,7 +356,7 @@ if __name__ == '__main__':
         logging.info(f'[Training] Initial learning rate: {current_learning_rate}')
 
         # Training Loop
-        best_metrics = 0.0
+        best_metrics = float('-inf')
         early_stop_patience = int(getattr(cfg.run_args, 'early_stop_patience', 0) or 0)
         epochs_without_improvement = 0
         global_step = 0
@@ -392,6 +395,8 @@ if __name__ == '__main__':
 
                 out, loss = model(input_data, label=data.y[:, 0])
                 loss_value = float(loss.detach().cpu().item())
+                if not torch.isfinite(loss).all():
+                    raise FloatingPointError('Training loss is not finite')
                 training_logs.append(loss_value)
                 running_loss_total += loss_value
                 optimizer.zero_grad()
@@ -459,7 +464,8 @@ if __name__ == '__main__':
                     recall_res, ndcg_res, map_res, mrr_res, eval_loss = test_step(
                         model,
                         data=sampler_validate,
-                        desc=f'Validate {eph + 1}/{cfg.run_args.epoch}'
+                        desc=f'Validate {eph + 1}/{cfg.run_args.epoch}',
+                        max_batches=eval_max_batches,
                     )
                     summary_writer.add_scalar(f'validate/Recall@1', 100*recall_res[1], global_step)
                     summary_writer.add_scalar(f'validate/Recall@5', 100*recall_res[5], global_step)
@@ -568,7 +574,8 @@ if __name__ == '__main__':
         recall_res, ndcg_res, map_res, mrr_res, loss = test_step(
             model,
             sampler_test,
-            desc='Test'
+            desc='Test',
+            max_batches=eval_max_batches,
         )
         num_params = count_parameters(model)
         metric_dict = {
