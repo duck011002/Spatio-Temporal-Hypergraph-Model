@@ -78,6 +78,23 @@ NYC 使用已保存的 A4 候选缓存，通过当前 `a5_jev` 的 validation �
 
 本轮服务器产物已保存到 `server_artifacts/a5_review_20260921/final_remote/`，本地离线重算结果仍统一写入 `docs/results/a4_a5_recomputed_20260921/summary.json`。
 
+### 3.5 NYC：用户明确要求的 gate-override test
+
+在保留 formal rejected validation 的前提下，按用户明确要求，对同一冻结参数 `(weight=0.5, temperature=1)` 额外发送了一次 NYC test。该结果单独保存为 `nyc_a5_jev_force_test`，不替换 formal 结果：
+
+| 指标 | A4 backbone | override A5 | Δ |
+|---|---:|---:|---:|
+| R@1 | 0.261321 | 0.282108 | +2.079 pp |
+| R@5 | 0.526355 | 0.536006 | +0.965 pp |
+| R@10 | 0.611730 | 0.622866 | +1.114 pp |
+| R@20 | 0.676318 | 0.676318 | 0.000 pp |
+| NDCG@5 | 0.402178 | 0.416818 | +1.464 pp |
+| NDCG@10 | 0.429987 | 0.445275 | +1.529 pp |
+| NDCG@20 | 0.446764 | 0.459040 | +1.228 pp |
+| MRR | 0.379531 | 0.395350 | +1.582 pp |
+
+paired 变化为 rescued=99、lost=71、net Top-1=+28；用户聚类 bootstrap 的 ΔR@1 95% CI 为 [0.001399, 0.041604]，ΔMRR 95% CI 为 [0.002065, 0.029497]。这个结果证明 test 阶段本身有效，但由于 validation audit 未通过，论文中应明确标注为 override/diagnostic，而不是 formal A5 主结果。
+
 ## 4. NDCG 的本地复核
 
 本次已经把服务器的以下内容同步到本地：
@@ -100,6 +117,7 @@ NYC 使用已保存的 A4 候选缓存，通过当前 `a5_jev` 的 validation �
 | TKY 当前参数 validation | [0.001594, 0.010411] | [0.002774, 0.008174] | 143 / 101 | 不能替代 test |
 | TKY A5.1 paired test | [0.000290, 0.006677] | [0.001387, 0.005285] | 74 / 50 | calibration-safe 规则后正式 test |
 | NYC 当前 formal validation | [-0.001433, 0.037794] | [-0.001605, 0.024047] | 88 / 63 | audit net Top-1=-1，未发 test |
+| NYC gate-override test | [0.001399, 0.041604] | [0.002065, 0.029497] | 99 / 71 | 用户明确要求，非 formal gate-passed test |
 | NYC 历史类别融合 test | [0.006675, 0.033779] | [0.005213, 0.023783] | 59 / 32 | 旧协议、历史 test |
 
 这些区间是配对用户聚类 bootstrap 的描述性区间，不是多种子统计显著性结论。CA 的 NDCG、MAP、MRR、paired delta 也已逐样本重算；NYC 历史报告则用本地保存的历史候选和响应缓存重放得到完全一致的指标。
@@ -115,9 +133,9 @@ NYC 使用已保存的 A4 候选缓存，通过当前 `a5_jev` 的 validation �
 ### P1：优先补真正缺失的主实验
 
 1. **TKY A5.1 paired test**：已完成。按独立的 calibration-safe 规则冻结 `(0.2, 2)`，通过 calibration/audit 后只发起一次 test，结果已纳入本地总表。
-2. **NYC current-formal A5**：已完成 validation + select。选择 `(0.5, 1)`，但 audit net Top-1=-1，按准入规则没有发送 test；因此 NYC 当前仍是 validation-only。
+2. **NYC current-formal A5**：已完成 validation + select。选择 `(0.5, 1)`，但 audit net Top-1=-1，formal 结果没有通过 test 准入；随后按用户明确要求额外执行了单独标记的 override test。
 
-因此当前主实验已经具备 CA/TKY 的同协议 paired test；若论文必须要“三个数据集都具备 test”，还需要先讨论 NYC audit 门槛/独立安全规则，不能直接绕过当前冻结结果。CA 不需要重跑。
+因此当前三数据集都有 test 数字，但 NYC test 属于 gate-override diagnostic，不能与 CA/TKY formal test 混写。若论文必须要“三个数据集都具备 formal test”，还需要先讨论 NYC audit 门槛/独立安全规则。CA 不需要重跑。
 
 ### P2：主实验稳健性与方法对照
 
@@ -137,8 +155,8 @@ NYC 使用已保存的 A4 候选缓存，通过当前 `a5_jev` 的 validation �
 当前可写入论文的整理工作已经完成；剩余决策是：
 
 1. 使用已生成的本地 A4/A5/NDCG/MRR 总表和置信区间；
-2. 将 TKY A5.1 test 写入主表，将 NYC current-formal 标为 validation-only；
-3. 如果确实需要 NYC test，先单独讨论是否修改预注册准入规则，再决定是否新增一次独立 run；
+2. 将 TKY A5.1 formal test 写入主表，将 NYC formal validation 与 override test 分栏标注；
+3. 若要把 NYC 纳入 formal test 主表，先讨论是否修改预注册准入规则；当前 override 数字只能作为诊断/补充结果；
 4. 再决定是否投入多种子和 rule-teacher 联合消融。
 
 不需要重新训练 CA/TKY A4，也不需要重新计算 NDCG，更不应重跑已经完成的 CA Jev 请求。
@@ -149,7 +167,7 @@ GPU 开机后没有重训已经完成的 CA/TKY A4。服务器工作按以下顺
 
 1. 已将 A5.1 安全选参规则写入独立版本，使用已有 TKY validation 缓存冻结检查；原 `tky_a5_jev` 目录和失败准入记录未被覆盖。
 2. 已在 AutoDL 上只对 TKY 发起一次新的 test 请求并生成 `tky_a5_jev_v1` paired test 报告。
-3. NYC 已使用保存的 A4 candidate cache 生成 manifest，完成 validation/select；因 audit 未通过，按规则跳过唯一 test 请求。
+3. NYC 已使用保存的 A4 candidate cache 生成 manifest，完成 validation/select；formal gate 未通过后，按用户明确要求额外执行了一次单独的 override test。
 4. 已拉回 TKY/NYC 冻结文件、predictions、reports、ledger 和日志，并完成本地离线汇总。
 
 GPU 侧明确不做：CA A5 重跑、CA/TKY A4 重训、已完成 CA Jev 请求重发、观察 test 后调参。多种子 A4 和 rule-teacher 联合消融放在上述主实验闭环之后。

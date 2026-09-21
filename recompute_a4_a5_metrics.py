@@ -283,6 +283,7 @@ def main() -> None:
     final_remote = REVIEW / "final_remote" / "artifacts"
     tky_safe_frozen = load_json(final_remote / "tky_a5_jev_v1" / "frozen.json")
     nyc_frozen = load_json(final_remote / "nyc_a5_jev_formal" / "frozen.json")
+    nyc_force_frozen = load_json(final_remote / "nyc_a5_jev_force_test" / "frozen.json")
     tky_safe_test = formal_pair(
         "tky",
         "test",
@@ -299,6 +300,14 @@ def main() -> None:
         candidate_dir=final_remote / "nyc_a4_candidates",
         output_dir=final_remote / "nyc_a5_jev_formal",
     )
+    nyc_force_test = formal_pair(
+        "nyc",
+        "test",
+        float(nyc_force_frozen["weight"]),
+        float(nyc_force_frozen["temperature"]),
+        candidate_dir=final_remote / "nyc_a4_candidates",
+        output_dir=final_remote / "nyc_a5_jev_force_test",
+    )
     summary = {
         "version": "offline-a4-a5-recompute-v1",
         "offline_only": True,
@@ -312,10 +321,14 @@ def main() -> None:
         "nyc": historical_nyc(),
         "final_remote": {
             "tky_a5_1": {"frozen": tky_safe_frozen, "test": tky_safe_test},
-            "nyc_formal": {"frozen": nyc_frozen, "validation": nyc_validation},
+            "nyc_formal": {
+                "frozen": nyc_frozen,
+                "validation": nyc_validation,
+                "test_override": {"frozen": nyc_force_frozen, "test": nyc_force_test},
+            },
         },
         "gpu_pending": [
-            "NYC formal test was intentionally skipped because validation safety gates rejected the selected fusion.",
+            "NYC test was executed only as an explicitly labeled override after the formal validation safety gate rejected the selected fusion.",
         ],
     }
     (OUT / "summary.json").write_text(

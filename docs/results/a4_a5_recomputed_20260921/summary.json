@@ -5451,10 +5451,91 @@
           "bootstrap_seed": 20260920,
           "mcnemar_exact_p_descriptive": 0.05044785478187975
         }
+      },
+      "test_override": {
+        "frozen": {
+          "version": "A5-Jev-explicit-test-override-v1",
+          "weight": 0.5,
+          "temperature": 1.0,
+          "smoothing": 0.02,
+          "eligible_for_test": true,
+          "prepared_hash": "a2b3b58afa5d3fe22c5c120063611b2c874b60cc3b2ad898c950181bb21309c9",
+          "validation_predictions_hash": "964b61db21bd42eacfe5b3cecb236f5139b3dbcc6f093350211ae9ad3973fe18",
+          "validation_gate_overridden": true,
+          "override_reason": "User explicitly requested NYC test after the formal validation gate rejected it",
+          "source_frozen_hash": "f9a5ae68760fe071fc2ad562a5780cf3aad5a34f08475725bbb3cb007df22b32"
+        },
+        "test": {
+          "n": 1347,
+          "metrics": {
+            "recall_at_1": 0.28210838901262064,
+            "ndcg_at_1": 0.28210838901262064,
+            "map_at_1": 0.28210838901262064,
+            "recall_at_5": 0.5360059391239792,
+            "ndcg_at_5": 0.4168179535935601,
+            "map_at_5": 0.3772086117297699,
+            "recall_at_10": 0.6228656273199703,
+            "ndcg_at_10": 0.44527472633592063,
+            "map_at_10": 0.38916699072601074,
+            "recall_at_20": 0.676317743132888,
+            "ndcg_at_20": 0.4590401918792369,
+            "map_at_20": 0.3930745451114072,
+            "mrr": 0.39535046797460993
+          },
+          "backbone": {
+            "recall_at_1": 0.2613214550853749,
+            "ndcg_at_1": 0.2613214550853749,
+            "map_at_1": 0.2613214550853749,
+            "recall_at_5": 0.526354862657758,
+            "ndcg_at_5": 0.40217843532026576,
+            "map_at_5": 0.36081415491215046,
+            "recall_at_10": 0.6117297698589458,
+            "ndcg_at_10": 0.42998655750205167,
+            "map_at_10": 0.3724122388376286,
+            "recall_at_20": 0.676317743132888,
+            "ndcg_at_20": 0.4467640166562295,
+            "map_at_20": 0.3772551194428672,
+            "mrr": 0.37953104230607
+          },
+          "delta": {
+            "recall_at_1": 0.020786933927245732,
+            "ndcg_at_1": 0.020786933927245732,
+            "map_at_1": 0.020786933927245732,
+            "recall_at_5": 0.009651076466221209,
+            "ndcg_at_5": 0.01463951827329435,
+            "map_at_5": 0.01639445681761942,
+            "recall_at_10": 0.011135857461024523,
+            "ndcg_at_10": 0.015288168833868965,
+            "map_at_10": 0.016754751888382158,
+            "recall_at_20": 0.0,
+            "ndcg_at_20": 0.01227617522300739,
+            "map_at_20": 0.01581942566854,
+            "mrr": 0.015819425668539944
+          },
+          "paired": {
+            "net_top1": 28,
+            "rescued": 99,
+            "lost": 71,
+            "delta_r1": 0.020786933927245732,
+            "delta_mrr": 0.01581942566853997,
+            "user_cluster_ci_r1": [
+              0.0013986436119839758,
+              0.04160435641730217
+            ],
+            "user_cluster_ci_mrr": [
+              0.002065366667575487,
+              0.02949664243984545
+            ],
+            "n_users": 416,
+            "bootstrap_repeats": 2000,
+            "bootstrap_seed": 20260920,
+            "mcnemar_exact_p_descriptive": 0.03806366960413432
+          }
+        }
       }
     }
   },
   "gpu_pending": [
-    "NYC formal test was intentionally skipped because validation safety gates rejected the selected fusion."
+    "NYC test was executed only as an explicitly labeled override after the formal validation safety gate rejected the selected fusion."
   ]
 }
