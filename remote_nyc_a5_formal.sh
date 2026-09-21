@@ -23,17 +23,22 @@ if [[ ! -s artifacts/tky_a5_jev_v1/test_report.json ]]; then
 fi
 echo "[$(date -Is)] TKY complete; starting NYC candidate export"
 
-NYC_CKPT=tensorboard/20260723_155322/nyc/checkpoint.pt
-if [[ ! -s "$NYC_CKPT" ]]; then
-  echo "[$(date -Is)] ERROR documented NYC A4 checkpoint is missing: $NYC_CKPT"
-  exit 3
-fi
-
 NYC_CAND=artifacts/nyc_a4_candidates
 NYC_OUT=artifacts/nyc_a5_jev_formal
 if [[ -s "$NYC_CAND/candidate_manifest.json" ]]; then
   echo "[$(date -Is)] Reusing verified NYC candidate manifest"
+elif [[ -s "$NYC_CAND/validation_candidates.npz" && -s "$NYC_CAND/test_candidates.npz" ]]; then
+  echo "[$(date -Is)] Using verified legacy NYC A4 candidate cache"
+  "$PY" -u make_a5_candidate_manifest.py \
+    --dataset nyc --data data/nyc/preprocessed --candidates "$NYC_CAND" \
+    --config conf/best_conf/nyc_r1_6_aux_free_dual_gate.yml --seed 80786525 \
+    --source-note "Legacy A4 candidate cache from 20260723_155322; checkpoint metadata unavailable"
 else
+  NYC_CKPT=tensorboard/20260723_155322/nyc/checkpoint.pt
+  if [[ ! -s "$NYC_CKPT" ]]; then
+    echo "[$(date -Is)] ERROR documented NYC A4 checkpoint is missing: $NYC_CKPT"
+    exit 3
+  fi
   if [[ -d "$NYC_CAND" ]] && find "$NYC_CAND" -mindepth 1 -print -quit | grep -q .; then
     echo "[$(date -Is)] ERROR NYC candidate directory is non-empty without a manifest; refusing overwrite"
     exit 4
