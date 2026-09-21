@@ -57,6 +57,27 @@ CA 的 A5 使用 `weight=0.35, temperature=2`，validation 准入为 true。下�
 
 NYC 历史类别融合 test 为 R@1 +2.004 pp、R@5 +1.262 pp、R@10 +0.965 pp、R@20 0，NDCG@5 +1.435 pp、NDCG@10 +1.368 pp、NDCG@20 +1.119 pp、MRR +1.434 pp。这个结果使用的是旧的 arithmetic/category 融合实验协议，虽然方向很好，但 prompt、分区和 log-fusion 实现与当前 `a5_jev` 不完全一致。因此它可以放在历史探索结果或补充材料，不能直接和 CA 的正式 A5 并列宣称“三数据集当前 A5 均已验证”。
 
+### 3.4 2026-09-21 GPU follow-up：TKY A5.1 完成，NYC 当前协议止于 validation
+
+按新的 calibration-safe 选参规则，TKY 在已有 validation 响应上冻结为 `(weight=0.2, temperature=2)`，calibration net Top-1=+1、audit net Top-1=+4，通过准入后只发起一次 test。A5.1 paired test 结果为：
+
+| 指标 | A4 backbone | A5.1 | Δ |
+|---|---:|---:|---:|
+| R@1 | 0.284456 | 0.287866 | +0.341 pp |
+| R@5 | 0.510372 | 0.515061 | +0.469 pp |
+| R@10 | 0.588946 | 0.591503 | +0.256 pp |
+| R@20 | 0.651890 | 0.651890 | 0.000 pp |
+| NDCG@5 | 0.404547 | 0.408611 | +0.406 pp |
+| NDCG@10 | 0.430044 | 0.433429 | +0.338 pp |
+| NDCG@20 | 0.446059 | 0.448684 | +0.263 pp |
+| MRR | 0.387882 | 0.391192 | +0.331 pp |
+
+TKY test 的 paired 变化为 rescued=74、lost=50、net Top-1=+24；用户聚类 bootstrap 的 ΔR@1 95% CI 为 [0.000290, 0.006677]，ΔMRR 95% CI 为 [0.001387, 0.005285]。
+
+NYC 使用已保存的 A4 候选缓存，通过当前 `a5_jev` 的 validation 请求和冻结流程，选择 `(weight=0.5, temperature=1)`。全 validation 的变化为 R@1 +1.786 pp、R@5 +0.571 pp、R@10 +0.429 pp、R@20 0、NDCG@5 +1.057 pp、NDCG@10 +0.966 pp、NDCG@20 +0.881 pp、MRR +1.149 pp。但 audit 分区 net Top-1=-1，故 `eligible_for_test=false`，没有发送 NYC test 请求；这不是 test 结果，不能与 CA/TKY test 并列。
+
+本轮服务器产物已保存到 `server_artifacts/a5_review_20260921/final_remote/`，本地离线重算结果仍统一写入 `docs/results/a4_a5_recomputed_20260921/summary.json`。
+
 ## 4. NDCG 的本地复核
 
 本次已经把服务器的以下内容同步到本地：
@@ -65,6 +86,7 @@ NYC 历史类别融合 test 为 R@1 +2.004 pp、R@5 +1.262 pp、R@10 +0.965 pp�
 - `server_artifacts/a5_review_20260921/artifacts/tky_a4_candidates/`
 - `server_artifacts/a5_review_20260921/artifacts/ca_a5_jev/`
 - `server_artifacts/a5_review_20260921/artifacts/tky_a5_jev/`
+- `server_artifacts/a5_review_20260921/final_remote/`（TKY A5.1 test、NYC formal validation、日志与 ledger）
 - `server_artifacts/a5_review_20260921/remote_runs/`
 
 本地用相同的 `evaluate_ranking` 重新读取 CA/TKY 候选，得到的 backbone 指标与 A5 报告逐项一致；因此后续可以在本地补算 NDCG、MAP、MRR、paired delta 和用户级 bootstrap 区间，不需要重新训练，也不需要重新调用 Jev。服务器原始 A4 日志、候选 manifest 和数据哈希也一并保留。
@@ -76,6 +98,8 @@ NYC 历史类别融合 test 为 R@1 +2.004 pp、R@5 +1.262 pp、R@10 +0.965 pp�
 | CA A5 formal test | [-0.000722, 0.017182] | [0.001460, 0.012934] | 79 / 56 | 点估计为正；R@1 区间跨 0，MRR 区间为正 |
 | CA A5 validation | [-0.001695, 0.012764] | [0.000174, 0.009606] | 91 / 72 | 仅 validation |
 | TKY 当前参数 validation | [0.001594, 0.010411] | [0.002774, 0.008174] | 143 / 101 | 不能替代 test |
+| TKY A5.1 paired test | [0.000290, 0.006677] | [0.001387, 0.005285] | 74 / 50 | calibration-safe 规则后正式 test |
+| NYC 当前 formal validation | [-0.001433, 0.037794] | [-0.001605, 0.024047] | 88 / 63 | audit net Top-1=-1，未发 test |
 | NYC 历史类别融合 test | [0.006675, 0.033779] | [0.005213, 0.023783] | 59 / 32 | 旧协议、历史 test |
 
 这些区间是配对用户聚类 bootstrap 的描述性区间，不是多种子统计显著性结论。CA 的 NDCG、MAP、MRR、paired delta 也已逐样本重算；NYC 历史报告则用本地保存的历史候选和响应缓存重放得到完全一致的指标。
@@ -90,10 +114,10 @@ NYC 历史类别融合 test 为 R@1 +2.004 pp、R@5 +1.262 pp、R@10 +0.965 pp�
 
 ### P1：优先补真正缺失的主实验
 
-1. **TKY A5.1 paired test**：先把新的安全选择规则写入独立版本并在已有 validation 缓存上冻结，例如选择满足 calibration 不降的候选中 selection objective 最高者，audit 只作准入；然后只发起一次 TKY test。当前离线诊断预期首选 `(0.2, 2)`，但必须在规则冻结后再确认。
-2. **NYC current-formal A5**：复用已有 NYC A4 候选/数据，按当前 `a5_jev` 的 prompt、log fusion、selection/calibration/audit 协议重新走一遍。它不需要重训 A4，但需要新的 validation/test Jev 响应，完成后才能形成真正同协议的 NYC/CA/TKY A5 主表。
+1. **TKY A5.1 paired test**：已完成。按独立的 calibration-safe 规则冻结 `(0.2, 2)`，通过 calibration/audit 后只发起一次 test，结果已纳入本地总表。
+2. **NYC current-formal A5**：已完成 validation + select。选择 `(0.5, 1)`，但 audit net Top-1=-1，按准入规则没有发送 test；因此 NYC 当前仍是 validation-only。
 
-这两项完成后，主实验才具备“同一 A5 协议、三个数据集、A4 paired baseline”的完整结构。CA 不需要重跑。
+因此当前主实验已经具备 CA/TKY 的同协议 paired test；若论文必须要“三个数据集都具备 test”，还需要先讨论 NYC audit 门槛/独立安全规则，不能直接绕过当前冻结结果。CA 不需要重跑。
 
 ### P2：主实验稳健性与方法对照
 
@@ -110,22 +134,22 @@ NYC 历史类别融合 test 为 R@1 +2.004 pp、R@5 +1.262 pp、R@10 +0.965 pp�
 
 ## 6. 当前最小执行清单
 
-如果目标是尽快得到可写入论文的主结果，下一轮只需要：
+当前可写入论文的整理工作已经完成；剩余决策是：
 
 1. 使用已生成的本地 A4/A5/NDCG/MRR 总表和置信区间；
-2. 冻结并实现 A5.1，补 TKY 一次 test；
-3. 按当前正式协议补 NYC 一次 A5 validation + test；
+2. 将 TKY A5.1 test 写入主表，将 NYC current-formal 标为 validation-only；
+3. 如果确实需要 NYC test，先单独讨论是否修改预注册准入规则，再决定是否新增一次独立 run；
 4. 再决定是否投入多种子和 rule-teacher 联合消融。
 
 不需要重新训练 CA/TKY A4，也不需要重新计算 NDCG，更不应重跑已经完成的 CA Jev 请求。
 
-## 7. GPU 开机后的明确工作
+## 7. GPU follow-up 执行记录
 
-GPU 开机后不需要再重训已经完成的 CA/TKY A4。待执行的服务器工作按以下顺序固定：
+GPU 开机后没有重训已经完成的 CA/TKY A4。服务器工作按以下顺序执行并已完成/收束：
 
-1. 将 A5.1 的安全选参规则写入独立版本，使用本地已经重算的 TKY validation 缓存做冻结检查；不触碰原 `tky_a5_jev` 目录，不覆盖原失败准入记录。
-2. 在 AutoDL 上只对 TKY 发起一次新的 test 请求并生成 `tky_a5_jev_v1` 的 paired test 报告；如果新规则未通过 audit，立即停止，不发 test。
-3. 为 NYC 准备当前正式 `a5_jev` 所需的 A4 candidate manifest；完成 validation、select 后，只有准入通过才发起唯一 test 请求，目录与历史 `jev_category_nyc_20260920` 分开。
-4. 拉回 TKY/NYC 的冻结文件、test predictions、test report、ledger 和日志，重新运行本地离线汇总。
+1. 已将 A5.1 安全选参规则写入独立版本，使用已有 TKY validation 缓存冻结检查；原 `tky_a5_jev` 目录和失败准入记录未被覆盖。
+2. 已在 AutoDL 上只对 TKY 发起一次新的 test 请求并生成 `tky_a5_jev_v1` paired test 报告。
+3. NYC 已使用保存的 A4 candidate cache 生成 manifest，完成 validation/select；因 audit 未通过，按规则跳过唯一 test 请求。
+4. 已拉回 TKY/NYC 冻结文件、predictions、reports、ledger 和日志，并完成本地离线汇总。
 
 GPU 侧明确不做：CA A5 重跑、CA/TKY A4 重训、已完成 CA Jev 请求重发、观察 test 后调参。多种子 A4 和 rule-teacher 联合消融放在上述主实验闭环之后。

@@ -166,9 +166,16 @@ def current_predictions(path: Path) -> list[dict]:
     raise ValueError(f"Unexpected prediction payload: {path}")
 
 
-def formal_pair(dataset: str, split: str, weight: float, temperature: float) -> dict:
-    candidate_dir = REVIEW / "artifacts" / f"{dataset}_a4_candidates"
-    output_dir = REVIEW / "artifacts" / f"{dataset}_a5_jev"
+def formal_pair(
+    dataset: str,
+    split: str,
+    weight: float,
+    temperature: float,
+    candidate_dir: Path | None = None,
+    output_dir: Path | None = None,
+) -> dict:
+    candidate_dir = candidate_dir or REVIEW / "artifacts" / f"{dataset}_a4_candidates"
+    output_dir = output_dir or REVIEW / "artifacts" / f"{dataset}_a5_jev"
     data = Dataset(dataset, ROOT / "data" / dataset / "preprocessed", candidate_dir, split)
     predictions = current_predictions(output_dir / f"{split}_predictions.json")
     ranked = fuse(
@@ -273,6 +280,25 @@ def main() -> None:
     ca_validation = formal_pair("ca", "validation", 0.35, 2.0)
     ca_test = formal_pair("ca", "test", 0.35, 2.0)
     tky_validation = formal_pair("tky", "validation", 0.2, 1.0)
+    final_remote = REVIEW / "final_remote" / "artifacts"
+    tky_safe_frozen = load_json(final_remote / "tky_a5_jev_v1" / "frozen.json")
+    nyc_frozen = load_json(final_remote / "nyc_a5_jev_formal" / "frozen.json")
+    tky_safe_test = formal_pair(
+        "tky",
+        "test",
+        float(tky_safe_frozen["weight"]),
+        float(tky_safe_frozen["temperature"]),
+        candidate_dir=REVIEW / "artifacts" / "tky_a4_candidates",
+        output_dir=final_remote / "tky_a5_jev_v1",
+    )
+    nyc_validation = formal_pair(
+        "nyc",
+        "validation",
+        float(nyc_frozen["weight"]),
+        float(nyc_frozen["temperature"]),
+        candidate_dir=final_remote / "nyc_a4_candidates",
+        output_dir=final_remote / "nyc_a5_jev_formal",
+    )
     summary = {
         "version": "offline-a4-a5-recompute-v1",
         "offline_only": True,
@@ -282,11 +308,14 @@ def main() -> None:
             "tky_candidates": str((REVIEW / "artifacts" / "tky_a4_candidates").relative_to(ROOT)),
         },
         "ca": {"validation": ca_validation, "test": ca_test},
-        "tky": {"validation": tky_validation, "grid": tky_grid()},
+        "tky": {"validation": tky_validation, "grid": tky_grid(), "a5_1_test": tky_safe_test},
         "nyc": historical_nyc(),
+        "final_remote": {
+            "tky_a5_1": {"frozen": tky_safe_frozen, "test": tky_safe_test},
+            "nyc_formal": {"frozen": nyc_frozen, "validation": nyc_validation},
+        },
         "gpu_pending": [
-            "Freeze and run one TKY A5.1 test after the new safety-gated selection rule is recorded.",
-            "Run NYC with the current formal a5_jev protocol; historical category-fusion cache is not a substitute.",
+            "NYC formal test was intentionally skipped because validation safety gates rejected the selected fusion.",
         ],
     }
     (OUT / "summary.json").write_text(

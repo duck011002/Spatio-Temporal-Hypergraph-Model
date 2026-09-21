@@ -5163,6 +5163,73 @@
           "audit_ok": false
         }
       ]
+    },
+    "a5_1_test": {
+      "n": 7038,
+      "metrics": {
+        "recall_at_1": 0.2878658709860756,
+        "ndcg_at_1": 0.2878658709860756,
+        "map_at_1": 0.2878658709860756,
+        "recall_at_5": 0.5150610969025291,
+        "ndcg_at_5": 0.40861072810447574,
+        "map_at_5": 0.37320735057307947,
+        "recall_at_10": 0.5915032679738562,
+        "ndcg_at_10": 0.4334290069402006,
+        "map_at_10": 0.3835072193128459,
+        "recall_at_20": 0.651889741403808,
+        "ndcg_at_20": 0.44868426845023174,
+        "map_at_20": 0.38768544832139673,
+        "mrr": 0.39119155217827434
+      },
+      "backbone": {
+        "recall_at_1": 0.2844558113100313,
+        "ndcg_at_1": 0.2844558113100313,
+        "map_at_1": 0.2844558113100313,
+        "recall_at_5": 0.5103722648479682,
+        "ndcg_at_5": 0.40454732167777113,
+        "map_at_5": 0.3693544567585489,
+        "recall_at_10": 0.5889457232168229,
+        "ndcg_at_10": 0.43004365295551256,
+        "map_at_10": 0.3799294758160913,
+        "recall_at_20": 0.651889741403808,
+        "ndcg_at_20": 0.446059141193093,
+        "map_at_20": 0.38437635438206524,
+        "mrr": 0.387882458238943
+      },
+      "delta": {
+        "recall_at_1": 0.003410059676044297,
+        "ndcg_at_1": 0.003410059676044297,
+        "map_at_1": 0.003410059676044297,
+        "recall_at_5": 0.004688832054560943,
+        "ndcg_at_5": 0.004063406426704608,
+        "map_at_5": 0.003852893814530578,
+        "recall_at_10": 0.002557544757033292,
+        "ndcg_at_10": 0.003385353984688033,
+        "map_at_10": 0.003577743496754604,
+        "recall_at_20": 0.0,
+        "ndcg_at_20": 0.0026251272571387596,
+        "map_at_20": 0.0033090939393314867,
+        "mrr": 0.00330909393933132
+      },
+      "paired": {
+        "net_top1": 24,
+        "rescued": 74,
+        "lost": 50,
+        "delta_r1": 0.0034100596760443308,
+        "delta_mrr": 0.00330909393933143,
+        "user_cluster_ci_r1": [
+          0.00028972176572068646,
+          0.006677323773037319
+        ],
+        "user_cluster_ci_mrr": [
+          0.0013868169802681882,
+          0.005284545047517374
+        ],
+        "n_users": 1662,
+        "bootstrap_repeats": 2000,
+        "bootstrap_seed": 20260920,
+        "mcnemar_exact_p_descriptive": 0.03844849701100043
+      }
     }
   },
   "nyc": {
@@ -5219,8 +5286,175 @@
       }
     }
   },
+  "final_remote": {
+    "tky_a5_1": {
+      "frozen": {
+        "version": "A5-Jev-safe-v1",
+        "policy": "calibration_safe_selection_v1",
+        "weight": 0.2,
+        "temperature": 2.0,
+        "smoothing": 0.02,
+        "eligible_for_test": true,
+        "prepared_hash": "5b6fc5e393e2704c7680634c7cd16930cac02482e5a157b2c116cd9a440a73c8",
+        "validation_predictions_hash": "459c4a492c486c28b13e1eef0bd054534ac57b3f5407b62b37a779a5d503d478",
+        "source_output": "artifacts/tky_a5_jev",
+        "source_hashes": {
+          "run_a5_jev.py": "272f6b52d58868b90f82f8f86ded8fb4037d2eb54a3914e156783937468271f7",
+          "a5_jev/__init__.py": "bb70a60b646839bf60aadfdf2578670639aa84e6bd0a9982aa3ee1183dd6adf4",
+          "a5_jev/client.py": "66c584a2a80f82c9525dd6b118d07dfb40ae5844be49dad3d3d233aab4a1a4cf",
+          "a5_jev/core.py": "cbf3958426d2bfe85726fd9ba5bf42b60fbb40c51ca08db86a35c42247aaa0e9",
+          "a5_jev/data.py": "3cb92583d18d101a54a8805dc8ee753f569d606a1405ae31e812608774cff0bd",
+          "rule_teacher/core.py": "fa6cfb7f7fe218d2c97d705fe394497791a6fc8e8e1d0dcfe27a88cf2704a57d"
+        }
+      },
+      "test": {
+        "n": 7038,
+        "metrics": {
+          "recall_at_1": 0.2878658709860756,
+          "ndcg_at_1": 0.2878658709860756,
+          "map_at_1": 0.2878658709860756,
+          "recall_at_5": 0.5150610969025291,
+          "ndcg_at_5": 0.40861072810447574,
+          "map_at_5": 0.37320735057307947,
+          "recall_at_10": 0.5915032679738562,
+          "ndcg_at_10": 0.4334290069402006,
+          "map_at_10": 0.3835072193128459,
+          "recall_at_20": 0.651889741403808,
+          "ndcg_at_20": 0.44868426845023174,
+          "map_at_20": 0.38768544832139673,
+          "mrr": 0.39119155217827434
+        },
+        "backbone": {
+          "recall_at_1": 0.2844558113100313,
+          "ndcg_at_1": 0.2844558113100313,
+          "map_at_1": 0.2844558113100313,
+          "recall_at_5": 0.5103722648479682,
+          "ndcg_at_5": 0.40454732167777113,
+          "map_at_5": 0.3693544567585489,
+          "recall_at_10": 0.5889457232168229,
+          "ndcg_at_10": 0.43004365295551256,
+          "map_at_10": 0.3799294758160913,
+          "recall_at_20": 0.651889741403808,
+          "ndcg_at_20": 0.446059141193093,
+          "map_at_20": 0.38437635438206524,
+          "mrr": 0.387882458238943
+        },
+        "delta": {
+          "recall_at_1": 0.003410059676044297,
+          "ndcg_at_1": 0.003410059676044297,
+          "map_at_1": 0.003410059676044297,
+          "recall_at_5": 0.004688832054560943,
+          "ndcg_at_5": 0.004063406426704608,
+          "map_at_5": 0.003852893814530578,
+          "recall_at_10": 0.002557544757033292,
+          "ndcg_at_10": 0.003385353984688033,
+          "map_at_10": 0.003577743496754604,
+          "recall_at_20": 0.0,
+          "ndcg_at_20": 0.0026251272571387596,
+          "map_at_20": 0.0033090939393314867,
+          "mrr": 0.00330909393933132
+        },
+        "paired": {
+          "net_top1": 24,
+          "rescued": 74,
+          "lost": 50,
+          "delta_r1": 0.0034100596760443308,
+          "delta_mrr": 0.00330909393933143,
+          "user_cluster_ci_r1": [
+            0.00028972176572068646,
+            0.006677323773037319
+          ],
+          "user_cluster_ci_mrr": [
+            0.0013868169802681882,
+            0.005284545047517374
+          ],
+          "n_users": 1662,
+          "bootstrap_repeats": 2000,
+          "bootstrap_seed": 20260920,
+          "mcnemar_exact_p_descriptive": 0.03844849701100043
+        }
+      }
+    },
+    "nyc_formal": {
+      "frozen": {
+        "version": "A5-Jev",
+        "weight": 0.5,
+        "temperature": 1.0,
+        "smoothing": 0.02,
+        "eligible_for_test": false,
+        "prepared_hash": "a2b3b58afa5d3fe22c5c120063611b2c874b60cc3b2ad898c950181bb21309c9",
+        "validation_predictions_hash": "964b61db21bd42eacfe5b3cecb236f5139b3dbcc6f093350211ae9ad3973fe18"
+      },
+      "validation": {
+        "n": 1400,
+        "metrics": {
+          "recall_at_1": 0.2792857142857143,
+          "ndcg_at_1": 0.2792857142857143,
+          "map_at_1": 0.2792857142857143,
+          "recall_at_5": 0.5107142857142857,
+          "ndcg_at_5": 0.402064051445381,
+          "map_at_5": 0.3659880952380952,
+          "recall_at_10": 0.6,
+          "ndcg_at_10": 0.4310832948791379,
+          "map_at_10": 0.378047619047619,
+          "recall_at_20": 0.6478571428571429,
+          "ndcg_at_20": 0.4433924238167029,
+          "map_at_20": 0.3815363858216579,
+          "mrr": 0.3839317999013334
+        },
+        "backbone": {
+          "recall_at_1": 0.26142857142857145,
+          "ndcg_at_1": 0.26142857142857145,
+          "map_at_1": 0.26142857142857145,
+          "recall_at_5": 0.505,
+          "ndcg_at_5": 0.39149579080014635,
+          "map_at_5": 0.35375,
+          "recall_at_10": 0.5957142857142858,
+          "ndcg_at_10": 0.4214252405681436,
+          "map_at_10": 0.3664469954648526,
+          "recall_at_20": 0.6478571428571429,
+          "ndcg_at_20": 0.43458532872733574,
+          "map_at_20": 0.37004783961492826,
+          "mrr": 0.3724432536946039
+        },
+        "delta": {
+          "recall_at_1": 0.01785714285714285,
+          "ndcg_at_1": 0.01785714285714285,
+          "map_at_1": 0.01785714285714285,
+          "recall_at_5": 0.005714285714285672,
+          "ndcg_at_5": 0.01056826064523464,
+          "map_at_5": 0.012238095238095215,
+          "recall_at_10": 0.004285714285714226,
+          "ndcg_at_10": 0.009658054310994257,
+          "map_at_10": 0.011600623582766423,
+          "recall_at_20": 0.0,
+          "ndcg_at_20": 0.008807095089367167,
+          "map_at_20": 0.011488546206729622,
+          "mrr": 0.01148854620672951
+        },
+        "paired": {
+          "net_top1": 25,
+          "rescued": 88,
+          "lost": 63,
+          "delta_r1": 0.017857142857142856,
+          "delta_mrr": 0.011488546206729533,
+          "user_cluster_ci_r1": [
+            -0.0014327935005839833,
+            0.03779401850830422
+          ],
+          "user_cluster_ci_mrr": [
+            -0.0016042000934246854,
+            0.024047264508952036
+          ],
+          "n_users": 472,
+          "bootstrap_repeats": 2000,
+          "bootstrap_seed": 20260920,
+          "mcnemar_exact_p_descriptive": 0.05044785478187975
+        }
+      }
+    }
+  },
   "gpu_pending": [
-    "Freeze and run one TKY A5.1 test after the new safety-gated selection rule is recorded.",
-    "Run NYC with the current formal a5_jev protocol; historical category-fusion cache is not a substitute."
+    "NYC formal test was intentionally skipped because validation safety gates rejected the selected fusion."
   ]
 }
