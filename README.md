@@ -1,4 +1,6 @@
 # STHGCN
+
+> 当前论文准备入口：[docs/README.md](docs/README.md)。新增 A4 / A5-Jev 的方法、实验、复现与待办位于 `docs/paper/`；历史方案位于 `docs/archive/`。**下文是原 STHGCN 上游说明，其中论文结果不属于本项目新增实验。**
 This repository includes the implementation details of the method STHGCN and helps readers to reproduce the results in the paper
 **Spatio-Temporal Hypergraph Learning for Next POI Recommendation**, whose objective is to utilize hypergraph convolution networks to 
 model diverse user behaviors in the next-POI recommendation task. 
